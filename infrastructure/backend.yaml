@@ -1,0 +1,603 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'JogaFacil Backend Stack - Serverless Infrastructure with SAM'
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 10
+    MemorySize: 128
+    Environment:
+      Variables:
+        POWERTOOLS_SERVICE_NAME: jogafacil
+        POWERTOOLS_METRICS_NAMESPACE: jogafacil
+        LOG_LEVEL: INFO
+
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    Description: Deployment stage (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+  
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name
+  
+  ProjectName:
+    Type: String
+    Default: jogafacil
+    Description: Project name
+
+Resources:
+  # CloudWatch Log Groups
+  StudentsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-students-${Environment}'
+      RetentionInDays: 7
+
+  CoachesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-coaches-${Environment}'
+      RetentionInDays: 7
+
+  TeamsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-teams-${Environment}'
+      RetentionInDays: 7
+
+  PlacesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-places-${Environment}'
+      RetentionInDays: 7
+
+  ScheduleLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-schedule-${Environment}'
+      RetentionInDays: 7
+
+  PaymentsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-payments-${Environment}'
+      RetentionInDays: 7
+
+  AcademiesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-academies-${Environment}'
+      RetentionInDays: 7
+
+  # DynamoDB Tables
+  StudentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-students-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  CoachesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-coaches-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  TeamsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-teams-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PlacesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-places-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  ScheduleTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-schedule-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PaymentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-payments-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  AcademiesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-academies-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-lambda-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt StudentsTable.Arn
+                  - !GetAtt CoachesTable.Arn
+                  - !GetAtt TeamsTable.Arn
+                  - !GetAtt PlacesTable.Arn
+                  - !GetAtt ScheduleTable.Arn
+                  - !GetAtt PaymentsTable.Arn
+                  - !Sub '${PaymentsTable.Arn}/index/*'
+                  - !GetAtt AcademiesTable.Arn
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Environment
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - '*'
+        MaxAge: 300
+
+  # SAM Lambda Functions
+  StudentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-students-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.students.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref StudentsTable
+      Events:
+        ListStudents:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /students
+            Method: GET
+        GetStudent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /students/{id}
+            Method: GET
+        CreateStudent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /students
+            Method: POST
+        UpdateStudent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /students/{id}
+            Method: PUT
+        DeleteStudent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /students/{id}
+            Method: DELETE
+      Tags:
+        Environment: !Ref Environment
+    Metadata:
+      BuildMethod: python3.11
+
+  CoachesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-coaches-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.coaches.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref CoachesTable
+      Events:
+        ListCoaches:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /coaches
+            Method: GET
+        GetCoach:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /coaches/{id}
+            Method: GET
+        CreateCoach:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /coaches
+            Method: POST
+        UpdateCoach:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /coaches/{id}
+            Method: PUT
+        DeleteCoach:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /coaches/{id}
+            Method: DELETE
+      Tags:
+        Environment: !Ref Environment
+
+  TeamsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-teams-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.teams.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TeamsTable
+      Events:
+        ListTeams:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /teams
+            Method: GET
+        GetTeam:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /teams/{id}
+            Method: GET
+        CreateTeam:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /teams
+            Method: POST
+        UpdateTeam:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /teams/{id}
+            Method: PUT
+        DeleteTeam:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /teams/{id}
+            Method: DELETE
+      Tags:
+        Environment: !Ref Environment
+
+  PlacesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-places-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.places.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref PlacesTable
+      Events:
+        ListPlaces:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /places
+            Method: GET
+        GetPlace:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /places/{id}
+            Method: GET
+        CreatePlace:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /places
+            Method: POST
+        UpdatePlace:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /places/{id}
+            Method: PUT
+        DeletePlace:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /places/{id}
+            Method: DELETE
+      Tags:
+        Environment: !Ref Environment
+
+  ScheduleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-schedule-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.schedule.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ScheduleTable
+      Events:
+        ListSchedule:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /schedule
+            Method: GET
+        GetSchedule:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /schedule/{id}
+            Method: GET
+        CreateSchedule:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /schedule
+            Method: POST
+        UpdateSchedule:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /schedule/{id}
+            Method: PUT
+        DeleteSchedule:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /schedule/{id}
+            Method: DELETE
+      Tags:
+        Environment: !Ref Environment
+
+  PaymentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-payments-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.payments.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref PaymentsTable
+      Events:
+        ListPayments:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payments
+            Method: GET
+        GetPayment:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payments/{id}
+            Method: GET
+        CreatePayment:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payments
+            Method: POST
+        UpdatePayment:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payments/{id}
+            Method: PUT
+        DeletePayment:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payments/{id}
+            Method: DELETE
+      Tags:
+        Environment: !Ref Environment
+
+  AcademiesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-academies-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.academies.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref AcademiesTable
+      Events:
+        ListAcademies:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /academies
+            Method: GET
+        GetAcademy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /academies/{id}
+            Method: GET
+      Tags:
+        Environment: !Ref Environment
+
+
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${ProjectName}-api-endpoint-${Environment}'
+
+  ApiGatewayId:
+    Description: API Gateway ID
+    Value: !Ref ApiGateway
+    Export:
+      Name: !Sub '${ProjectName}-api-id-${Environment}'
+
+  StudentsTableName:
+    Description: Students DynamoDB table name
+    Value: !Ref StudentsTable
+    Export:
+      Name: !Sub '${ProjectName}-students-table-${Environment}'
+
+  CoachesTableName:
+    Description: Coaches DynamoDB table name
+    Value: !Ref CoachesTable
+    Export:
+      Name: !Sub '${ProjectName}-coaches-table-${Environment}'
+
+  TeamsTableName:
+    Description: Teams DynamoDB table name
+    Value: !Ref TeamsTable
+    Export:
+      Name: !Sub '${ProjectName}-teams-table-${Environment}'
+
+  PlacesTableName:
+    Description: Places DynamoDB table name
+    Value: !Ref PlacesTable
+    Export:
+      Name: !Sub '${ProjectName}-places-table-${Environment}'
+
+  ScheduleTableName:
+    Description: Schedule DynamoDB table name
+    Value: !Ref ScheduleTable
+    Export:
+      Name: !Sub '${ProjectName}-schedule-table-${Environment}'
+
+  PaymentsTableName:
+    Description: Payments DynamoDB table name
+    Value: !Ref PaymentsTable
+    Export:
+      Name: !Sub '${ProjectName}-payments-table-${Environment}'
+
+  AcademiesTableName:
+    Description: Academies DynamoDB table name
+    Value: !Ref AcademiesTable
+    Export:
+      Name: !Sub '${ProjectName}-academies-table-${Environment}'

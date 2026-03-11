@@ -1,0 +1,56 @@
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "jogafacil-backend"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+confirm_changeset = true
+resolve_s3 = true
+region = "us-west-1"
+parameter_overrides = "Stage=dev Environment=dev"
+profile = "debitech"
+
+[default.package.parameters]
+resolve_s3 = true
+
+[default.sync.parameters]
+watch = true
+
+[default.local_start_api.parameters]
+warm_containers = "EAGER"
+
+[default.local_start_lambda.parameters]
+warm_containers = "EAGER"
+
+[dev]
+[dev.deploy.parameters]
+stack_name = "jogafacil-backend-dev"
+parameter_overrides = "Stage=dev Environment=dev"
+confirm_changeset = false
+region = "us-west-1"
+profile = "debitech"
+
+[staging]
+[staging.deploy.parameters]
+stack_name = "jogafacil-backend-staging"
+parameter_overrides = "Stage=staging Environment=staging"
+confirm_changeset = true
+region = "us-west-1"
+profile = "debitech"
+
+[prod]
+[prod.deploy.parameters]
+stack_name = "jogafacil-backend-prod"
+parameter_overrides = "Stage=prod Environment=prod"
+confirm_changeset = true
+region = "us-west-1"
+profile = "debitech"

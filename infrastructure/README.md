@@ -1,27 +1,6 @@
-# JogaFacil
+# JogaFacil Infrastructure
 
-Sports management application for managing students, coaches, teams, places, schedules, and payments.
-
-## Project Structure
-
-```
-jogafacil/
-├── backend/                    # Lambda functions and services
-│   ├── src/
-│   │   ├── handlers/          # Lambda function handlers
-│   │   ├── models/            # Data models
-│   │   └── services/          # Business logic and DynamoDB operations
-│   └── package-lambdas.sh     # Lambda packaging script
-├── frontend/                   # React application
-│   └── jogafacil/             # React app
-├── infrastructure/             # CloudFormation/SAM templates
-│   ├── backend.yaml           # Backend infrastructure (SAM)
-│   └── frontend.yaml          # Frontend infrastructure (S3/CloudFront)
-├── deploy.sh                  # Deploy full stack
-├── deploy-backend.sh          # Deploy backend only
-├── deploy-frontend.sh         # Deploy frontend only
-└── samconfig.toml             # SAM configuration
-```
+AWS SAM (Serverless Application Model) templates for deploying JogaFacil application.
 
 ## Architecture
 
@@ -156,17 +135,7 @@ sam build --use-container
 sam local start-api --warm-containers EAGER
 ```
 
-### Run Frontend Locally
-
-```bash
-cd frontend/jogafacil
-npm install
-npm run dev
-```
-
-## Configuration
-
-### SAM Configuration
+## SAM Configuration
 
 The `samconfig.toml` file contains deployment configurations for different environments:
 
@@ -174,7 +143,7 @@ The `samconfig.toml` file contains deployment configurations for different envir
 - **staging**: Deploy with confirmation
 - **prod**: Deploy with confirmation and additional safeguards
 
-### Environment Variables
+## Environment Variables
 
 The deployment scripts use the following defaults:
 
@@ -262,27 +231,27 @@ Base URL: `https://{api-id}.execute-api.{region}.amazonaws.com/{stage}`
 sam logs --stack-name jogafacil-backend-dev --name StudentsFunction --tail
 
 # View logs from CloudWatch
-aws logs tail /aws/lambda/jogafacil-students-dev --follow --profile debitech
+aws logs tail /aws/lambda/jogafacil-students-dev --follow
 ```
 
 ### Sync Changes (Development)
 
 ```bash
 # Watch for changes and auto-deploy
-sam sync --stack-name jogafacil-backend-dev --watch --profile debitech
+sam sync --stack-name jogafacil-backend-dev --watch
 ```
 
 ## Cleanup
 
 ```bash
 # Delete backend stack
-sam delete --stack-name jogafacil-backend-dev --profile debitech
+sam delete --stack-name jogafacil-backend-dev
 
 # Delete frontend stack
-aws cloudformation delete-stack --stack-name jogafacil-frontend-dev --profile debitech
+aws cloudformation delete-stack --stack-name jogafacil-frontend-dev
 
 # Empty S3 bucket first if needed
-aws s3 rm s3://jogafacil-frontend-dev --recursive --profile debitech
+aws s3 rm s3://jogafacil-frontend-dev --recursive
 ```
 
 ## Troubleshooting
@@ -304,7 +273,7 @@ sam build --use-container --debug
 sam validate --template-file infrastructure/backend.yaml
 
 # Check stack events
-aws cloudformation describe-stack-events --stack-name jogafacil-backend-dev --profile debitech
+aws cloudformation describe-stack-events --stack-name jogafacil-backend-dev
 ```
 
 ## Cost Optimization
@@ -323,7 +292,3 @@ aws cloudformation describe-stack-events --stack-name jogafacil-backend-dev --pr
 - Lambda functions have minimal IAM permissions
 - Consider adding API authentication (Cognito, API Keys) for production
 - Enable AWS WAF for API Gateway in production
-
-## License
-
-MIT
