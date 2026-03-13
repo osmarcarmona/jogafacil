@@ -1,288 +1,512 @@
+import { useState, useEffect } from 'react'
 import {
-  Box,
-  Typography,
-  Tabs,
-  Tab,
-  Paper,
-  List,
-  ListItem,
-  ListItemText,
-  Chip,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Grid
+  Box, Typography, Tabs, Tab, Paper, List, ListItem, ListItemText, Chip,
+  Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField,
+  FormControl, InputLabel, Select, MenuItem, Grid, CircularProgress,
+  Alert, IconButton, ToggleButtonGroup, ToggleButton, Tooltip
 } from '@mui/material'
-import { useState } from 'react'
-import { LocationOn, AccessTime, Add } from '@mui/icons-material'
+import { LocationOn, AccessTime, Add, Delete, Edit, ViewList, CalendarMonth, ChevronLeft, ChevronRight } from '@mui/icons-material'
+import { scheduleApi, teamsApi, coachesApi, placesApi } from '../services/api'
+import { useAcademy } from '../context/AcademyContext'
+
+const initialFormData = {
+  teamId: '', coachId: '', placeId: '', date: '',
+  arrivalTime: '', startTime: '', kit: '',
+  opponent: '', matchType: 'Local'
+}
 
 export default function Schedule() {
+  const { academy } = useAcademy()
   const [tab, setTab] = useState(0)
+  const [events, setEvents] = useState([])
+  const [teams, setTeams] = useState([])
+  const [coaches, setCoaches] = useState([])
+  const [places, setPlaces] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [openDialog, setOpenDialog] = useState(false)
-  const [eventType, setEventType] = useState('Entrenamiento')
-  const [formData, setFormData] = useState({
-    team: '',
-    coach: '',
-    date: '',
-    time: '',
-    place: '',
-    opponent: '',
-    matchType: 'Local'
+  const [editingEvent, setEditingEvent] = useState(null)
+  const [eventType, setEventType] = useState('training')
+  const [formData, setFormData] = useState(initialFormData)
+  const [filterDateFrom, setFilterDateFrom] = useState(() => {
+    const now = new Date()
+    const day = now.getDay()
+    const diff = day === 0 ? -6 : 1 - day
+    const monday = new Date(now)
+    monday.setDate(now.getDate() + diff)
+    return monday.toISOString().split('T')[0]
   })
+  const [filterDateTo, setFilterDateTo] = useState(() => {
+    const now = new Date()
+    const day = now.getDay()
+    const diff = day === 0 ? 0 : 7 - day
+    const sunday = new Date(now)
+    sunday.setDate(now.getDate() + diff)
+    return sunday.toISOString().split('T')[0]
+  })
+  const [filterTeam, setFilterTeam] = useState('')
+  const [viewMode, setViewMode] = useState('list') // 'list' | 'calendar'
+  const [calendarMode, setCalendarMode] = useState('month') // 'month' | 'week'
+  const [currentDate, setCurrentDate] = useState(new Date())
 
-  const trainings = [
-    { id: 1, team: 'Sub-10 A', day: 'Lunes', time: '16:00 - 17:30', place: 'Campo Principal', coach: 'Laura Fernández' },
-    { id: 2, team: 'Sub-12 A', day: 'Lunes', time: '17:30 - 19:00', place: 'Campo Principal', coach: 'Ana Ruiz' },
-    { id: 3, team: 'Sub-8', day: 'Martes', time: '16:00 - 17:00', place: 'Campo Auxiliar', coach: 'Roberto Gómez' },
-    { id: 4, team: 'Sub-10 B', day: 'Miércoles', time: '16:00 - 17:30', place: 'Campo Principal', coach: 'Miguel Torres' }
-  ]
+  useEffect(() => { loadAll() }, [academy])
 
-  const games = [
-    { id: 1, team: 'Sub-10 A', opponent: 'Club Deportivo', date: '2026-02-22', time: '10:00', place: 'Campo Principal', type: 'Local' },
-    { id: 2, team: 'Sub-12 A', opponent: 'Academia FC', date: '2026-02-23', time: '11:00', place: 'Estadio Municipal', type: 'Visitante' },
-    { id: 3, team: 'Sub-14', opponent: 'Escuela Fútbol', date: '2026-02-25', time: '16:00', place: 'Campo Principal', type: 'Local' }
-  ]
-
-  const teams = ['Sub-8', 'Sub-10 A', 'Sub-10 B', 'Sub-12 A', 'Sub-12 B', 'Sub-14']
-  const coaches = ['Roberto Gómez', 'Laura Fernández', 'Miguel Torres', 'Ana Ruiz', 'Carlos Díaz', 'Pedro Morales']
-  const places = ['Campo Principal', 'Campo Auxiliar', 'Cancha Techada', 'Estadio Municipal']
-
-  const handleOpenDialog = () => {
-    setOpenDialog(true)
+  const loadAll = async () => {
+    try {
+      setLoading(true)
+      const [sData, tData, cData, pData] = await Promise.all([
+        scheduleApi.getAll(academy), teamsApi.getAll(academy),
+        coachesApi.getAll(academy), placesApi.getAll(academy)
+      ])
+      setEvents(sData.schedule || [])
+      setTeams(tData.teams || [])
+      setCoaches(cData.coaches || [])
+      setPlaces(pData.places || [])
+      setError(null)
+    } catch (err) {
+      setError('Error al cargar datos: ' + err.message)
+    } finally { setLoading(false) }
   }
 
-  const handleCloseDialog = () => {
-    setOpenDialog(false)
+  const getName = (list, id) => list.find(i => i.id === id)?.name || id
+  const getTeamCoaches = (teamId) => {
+    const team = teams.find(t => t.id === teamId)
+    if (!team) return coaches
+    const ids = team.coachIds || (team.coachId ? [team.coachId] : [])
+    return ids.length ? coaches.filter(c => ids.includes(c.id)) : coaches
+  }
+  const applyFilters = (items) => {
+    let filtered = items
+    if (filterDateFrom) filtered = filtered.filter(e => e.date >= filterDateFrom)
+    if (filterDateTo) filtered = filtered.filter(e => e.date <= filterDateTo)
+    if (filterTeam) filtered = filtered.filter(e => e.teamId === filterTeam)
+    return filtered
+  }
+  const trainings = applyFilters(events.filter(e => e.type === 'training'))
+  const matches = applyFilters(events.filter(e => e.type === 'match'))
+
+  const handleOpenDialog = () => {
+    setEditingEvent(null); setEventType(tab === 1 ? 'match' : 'training')
+    setFormData(initialFormData); setOpenDialog(true)
+  }
+  const handleOpenEditDialog = (ev) => {
+    setEditingEvent(ev); setEventType(ev.type || 'training')
     setFormData({
-      team: '',
-      coach: '',
-      date: '',
-      time: '',
-      place: '',
-      opponent: '',
-      matchType: 'Local'
+      teamId: ev.teamId || '', coachId: ev.coachId || '',
+      placeId: ev.placeId || '', date: ev.date || '',
+      arrivalTime: ev.arrivalTime || '', startTime: ev.startTime || '',
+      kit: ev.kit || '', opponent: ev.opponent || '',
+      matchType: ev.matchType || 'Local'
+    })
+    setOpenDialog(true)
+  }
+  const handleCloseDialog = () => {
+    setOpenDialog(false); setEditingEvent(null); setFormData(initialFormData)
+  }
+  const handleInputChange = (field, value) => {
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value }
+      if (field === 'teamId') {
+        const team = teams.find(t => t.id === value)
+        const ids = team?.coachIds || (team?.coachId ? [team.coachId] : [])
+        updated.coachId = ids.length === 1 ? ids[0] : ''
+      }
+      return updated
+    })
+  }
+  const handleSubmit = async () => {
+    try {
+      const payload = { ...formData, type: eventType, academy }
+      if (eventType === 'training') { delete payload.opponent; delete payload.matchType }
+      if (editingEvent) await scheduleApi.update(editingEvent.id, payload)
+      else await scheduleApi.create(payload)
+      handleCloseDialog(); loadAll()
+    } catch (err) {
+      setError((editingEvent ? 'Error al actualizar' : 'Error al crear') + ' evento: ' + err.message)
+    }
+  }
+  const handleDelete = async (id) => {
+    if (!window.confirm('¿Estás seguro de eliminar este evento?')) return
+    try { await scheduleApi.delete(id); loadAll() }
+    catch (err) { setError('Error al eliminar evento: ' + err.message) }
+  }
+
+  if (loading) return (
+    <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <CircularProgress />
+    </Box>
+  )
+
+  const availableCoaches = formData.teamId ? getTeamCoaches(formData.teamId) : coaches
+  const isFormValid = formData.teamId && formData.coachId && formData.date
+    && formData.arrivalTime && formData.startTime && formData.placeId
+    && (eventType === 'training' || formData.opponent)
+  const canSubmit = editingEvent ? (formData.teamId && formData.date) : isFormValid
+
+  const renderList = (items, isMatch) => (
+    <List>
+      {items.length === 0 ? (
+        <ListItem>
+          <ListItemText primary={
+            <Typography align="center" color="text.secondary">
+              No hay {isMatch ? 'partidos' : 'entrenamientos'} registrados
+            </Typography>
+          } />
+        </ListItem>
+      ) : items.map((ev) => (
+        <ListItem key={ev.id} divider secondaryAction={
+          <Box>
+            <Button size="small" onClick={() => handleOpenEditDialog(ev)}>Editar</Button>
+            <IconButton size="small" color="error" onClick={() => handleDelete(ev.id)}>
+              <Delete fontSize="small" />
+            </IconButton>
+          </Box>
+        }>
+          <ListItemText
+            primary={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="subtitle1" fontWeight="bold">
+                  {getName(teams, ev.teamId)}
+                  {isMatch && ev.opponent ? ` vs ${ev.opponent}` : ''}
+                </Typography>
+                {isMatch && ev.matchType && (
+                  <Chip label={ev.matchType} size="small"
+                    color={ev.matchType === 'Local' ? 'success' : 'warning'} />
+                )}
+              </Box>
+            }
+            secondary={
+              <Box sx={{ mt: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <AccessTime fontSize="small" color="action" />
+                  <Typography variant="body2" color="text.secondary">
+                    {ev.date} — Llegada: {ev.arrivalTime} | Inicio: {ev.startTime}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <LocationOn fontSize="small" color="action" />
+                  <Typography variant="body2" color="text.secondary">
+                    {getName(places, ev.placeId)}
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Entrenador: {getName(coaches, ev.coachId)}
+                  {ev.kit ? ` | Equipación: ${ev.kit}` : ''}
+                </Typography>
+              </Box>
+            }
+          />
+        </ListItem>
+      ))}
+    </List>
+  )
+
+  // Calendar helpers
+  const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+  const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+  const toDateStr = (d) => d.toISOString().split('T')[0]
+
+  const getMonthDays = () => {
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    let startOffset = firstDay.getDay() - 1
+    if (startOffset < 0) startOffset = 6
+    const days = []
+    for (let i = -startOffset; i <= lastDay.getDate() - 1; i++) {
+      const d = new Date(year, month, i + 1)
+      days.push(d)
+    }
+    while (days.length % 7 !== 0) {
+      days.push(new Date(year, month, lastDay.getDate() + (days.length - lastDay.getDate() - startOffset + 1)))
+    }
+    return days
+  }
+
+  const getWeekDays = () => {
+    const d = new Date(currentDate)
+    const day = d.getDay()
+    const diff = day === 0 ? -6 : 1 - day
+    const monday = new Date(d)
+    monday.setDate(d.getDate() + diff)
+    return Array.from({ length: 7 }, (_, i) => {
+      const wd = new Date(monday)
+      wd.setDate(monday.getDate() + i)
+      return wd
     })
   }
 
-  const handleSubmit = () => {
-    console.log('Nuevo evento:', { eventType, ...formData })
-    handleCloseDialog()
+  const navigateCalendar = (direction) => {
+    const d = new Date(currentDate)
+    if (calendarMode === 'month') d.setMonth(d.getMonth() + direction)
+    else d.setDate(d.getDate() + direction * 7)
+    setCurrentDate(d)
   }
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+  const getEventsForDate = (dateStr) => {
+    let filtered = events.filter(e => e.date === dateStr)
+    if (filterTeam) filtered = filtered.filter(e => e.teamId === filterTeam)
+    return filtered
+  }
+
+  const calendarTitle = calendarMode === 'month'
+    ? `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`
+    : (() => {
+        const days = getWeekDays()
+        const from = days[0]
+        const to = days[6]
+        return `${from.getDate()} ${MONTH_NAMES[from.getMonth()].slice(0, 3)} — ${to.getDate()} ${MONTH_NAMES[to.getMonth()].slice(0, 3)} ${to.getFullYear()}`
+      })()
+
+  const renderCalendar = () => {
+    const days = calendarMode === 'month' ? getMonthDays() : getWeekDays()
+    const today = toDateStr(new Date())
+    const currentMonth = currentDate.getMonth()
+
+    return (
+      <Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <IconButton onClick={() => navigateCalendar(-1)}><ChevronLeft /></IconButton>
+            <Typography variant="h6" sx={{ minWidth: 220, textAlign: 'center' }}>{calendarTitle}</Typography>
+            <IconButton onClick={() => navigateCalendar(1)}><ChevronRight /></IconButton>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button size="small" variant="outlined" onClick={() => setCurrentDate(new Date())}>Hoy</Button>
+            <ToggleButtonGroup size="small" value={calendarMode} exclusive
+              onChange={(_, v) => v && setCalendarMode(v)}>
+              <ToggleButton value="month">Mes</ToggleButton>
+              <ToggleButton value="week">Semana</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        </Box>
+
+        <Box sx={{
+          display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+          border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden'
+        }}>
+          {DAY_NAMES.map(d => (
+            <Box key={d} sx={{ p: 1, textAlign: 'center', bgcolor: 'grey.100', fontWeight: 'bold', fontSize: 13, borderBottom: '1px solid', borderColor: 'divider' }}>
+              {d}
+            </Box>
+          ))}
+          {days.map((day, idx) => {
+            const dateStr = toDateStr(day)
+            const dayEvents = getEventsForDate(dateStr)
+            const isCurrentMonth = day.getMonth() === currentMonth
+            const isToday = dateStr === today
+            return (
+              <Box key={idx} sx={{
+                minHeight: calendarMode === 'week' ? 150 : 100,
+                p: 0.5, borderRight: (idx + 1) % 7 !== 0 ? '1px solid' : 'none',
+                borderBottom: '1px solid', borderColor: 'divider',
+                bgcolor: isToday ? 'action.hover' : (!isCurrentMonth && calendarMode === 'month' ? 'grey.50' : 'background.paper'),
+                opacity: !isCurrentMonth && calendarMode === 'month' ? 0.5 : 1
+              }}>
+                <Typography variant="caption" sx={{ fontWeight: isToday ? 'bold' : 'normal', color: isToday ? 'primary.main' : 'text.secondary' }}>
+                  {day.getDate()}
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3, mt: 0.3 }}>
+                  {dayEvents.slice(0, calendarMode === 'week' ? 6 : 3).map(ev => (
+                    <Tooltip key={ev.id} title={`${getName(teams, ev.teamId)} — ${ev.startTime} — ${getName(places, ev.placeId)}`} arrow>
+                      <Box sx={{
+                        display: 'flex', alignItems: 'center', gap: 0.3,
+                        px: 0.5, py: 0.2, borderRadius: 0.5, fontSize: 11,
+                        bgcolor: ev.type === 'match' ? 'warning.light' : 'success.light',
+                        color: ev.type === 'match' ? 'warning.contrastText' : 'success.contrastText',
+                        '&:hover .cal-actions': { display: 'flex' }
+                      }}>
+                        <Box sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                          onClick={() => handleOpenEditDialog(ev)}>
+                          {ev.startTime} {getName(teams, ev.teamId)}
+                        </Box>
+                        <Box className="cal-actions" sx={{ display: 'none', alignItems: 'center', gap: 0 }}>
+                          <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleOpenEditDialog(ev) }}
+                            sx={{ p: 0.2, color: 'inherit' }}>
+                            <Edit sx={{ fontSize: 12 }} />
+                          </IconButton>
+                          <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDelete(ev.id) }}
+                            sx={{ p: 0.2, color: 'inherit' }}>
+                            <Delete sx={{ fontSize: 12 }} />
+                          </IconButton>
+                        </Box>
+                      </Box>
+                    </Tooltip>
+                  ))}
+                  {dayEvents.length > (calendarMode === 'week' ? 6 : 3) && (
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, pl: 0.5 }}>
+                      +{dayEvents.length - (calendarMode === 'week' ? 6 : 3)} más
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+            )
+          })}
+        </Box>
+      </Box>
+    )
   }
 
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" fontWeight="bold">
-          Calendario
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          sx={{ bgcolor: '#2e7d32' }}
-          onClick={handleOpenDialog}
-        >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h4" fontWeight="bold">Calendario</Typography>
+          <ToggleButtonGroup size="small" value={viewMode} exclusive
+            onChange={(_, v) => v && setViewMode(v)}>
+            <ToggleButton value="list"><ViewList fontSize="small" /></ToggleButton>
+            <ToggleButton value="calendar"><CalendarMonth fontSize="small" /></ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+        <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: '#2e7d32' }} onClick={handleOpenDialog}>
           Nuevo Evento
         </Button>
       </Box>
 
-      <Paper sx={{ mt: 3 }}>
-        <Tabs value={tab} onChange={(e, v) => setTab(v)}>
-          <Tab label="Entrenamientos" />
-          <Tab label="Partidos" />
-        </Tabs>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {!academy && <Alert severity="warning" sx={{ mb: 2 }}>Selecciona una academia en el encabezado para ver y crear eventos.</Alert>}
 
-        {tab === 0 && (
-          <List>
-            {trainings.map((training) => (
-              <ListItem key={training.id} divider>
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="subtitle1" fontWeight="bold">
-                        {training.team}
-                      </Typography>
-                      <Chip label={training.day} size="small" color="primary" />
-                    </Box>
-                  }
-                  secondary={
-                    <Box sx={{ mt: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                        <AccessTime fontSize="small" />
-                        <Typography variant="body2">{training.time}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                        <LocationOn fontSize="small" />
-                        <Typography variant="body2">{training.place}</Typography>
-                      </Box>
-                      <Typography variant="body2" color="text.secondary">
-                        Entrenador: {training.coach}
-                      </Typography>
-                    </Box>
-                  }
-                />
-              </ListItem>
-            ))}
-          </List>
-        )}
+      {viewMode === 'list' && (
+        <>
+          <Paper sx={{ p: 2, mb: 2, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            <TextField
+              type="date" label="Desde" size="small"
+              InputLabelProps={{ shrink: true }}
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+              sx={{ minWidth: 160 }}
+            />
+            <TextField
+              type="date" label="Hasta" size="small"
+              InputLabelProps={{ shrink: true }}
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
+              sx={{ minWidth: 160 }}
+            />
+            <FormControl variant="standard" size="small" sx={{ minWidth: 180 }}>
+              <InputLabel>Filtrar por Equipo</InputLabel>
+              <Select value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)}>
+                <MenuItem value="">Todos</MenuItem>
+                {teams.map(t => <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>)}
+              </Select>
+            </FormControl>
+            {(filterDateFrom || filterDateTo || filterTeam) && (
+              <Button size="small" onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); setFilterTeam('') }}>
+                Limpiar filtros
+              </Button>
+            )}
+          </Paper>
 
-        {tab === 1 && (
-          <List>
-            {games.map((game) => (
-              <ListItem key={game.id} divider>
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="subtitle1" fontWeight="bold">
-                        {game.team} vs {game.opponent}
-                      </Typography>
-                      <Chip
-                        label={game.type}
-                        size="small"
-                        color={game.type === 'Local' ? 'success' : 'warning'}
-                      />
-                    </Box>
-                  }
-                  secondary={
-                    <Box sx={{ mt: 1 }}>
-                      <Typography variant="body2">
-                        {game.date} - {game.time}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                        <LocationOn fontSize="small" />
-                        <Typography variant="body2">{game.place}</Typography>
-                      </Box>
-                    </Box>
-                  }
-                />
-              </ListItem>
-            ))}
-          </List>
-        )}
-      </Paper>
+          <Paper sx={{ mb: 3 }}>
+            <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth">
+              <Tab label={`Entrenamientos (${trainings.length})`} />
+              <Tab label={`Partidos (${matches.length})`} />
+            </Tabs>
+          </Paper>
+
+          {tab === 0 && renderList(trainings, false)}
+          {tab === 1 && renderList(matches, true)}
+        </>
+      )}
+
+      {viewMode === 'calendar' && (
+        <Paper sx={{ p: 2, mb: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+            <FormControl variant="standard" size="small" sx={{ minWidth: 180 }}>
+              <InputLabel>Filtrar por Equipo</InputLabel>
+              <Select value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)}>
+                <MenuItem value="">Todos</MenuItem>
+                {teams.map(t => <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>)}
+              </Select>
+            </FormControl>
+            {filterTeam && (
+              <Button size="small" onClick={() => setFilterTeam('')}>Limpiar filtro</Button>
+            )}
+          </Box>
+          {renderCalendar()}
+        </Paper>
+      )}
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Crear Nuevo Evento</DialogTitle>
+        <DialogTitle>{editingEvent ? 'Editar Evento' : 'Nuevo Evento'}</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2 }}>
             <Grid container spacing={2}>
               <Grid item xs={12}>
-                <FormControl fullWidth>
+                <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }} required fullWidth>
                   <InputLabel>Tipo de Evento</InputLabel>
-                  <Select
-                    value={eventType}
-                    label="Tipo de Evento"
-                    onChange={(e) => setEventType(e.target.value)}
-                  >
-                    <MenuItem value="Entrenamiento">Entrenamiento</MenuItem>
-                    <MenuItem value="Partido">Partido</MenuItem>
-                    <MenuItem value="Reunión">Reunión</MenuItem>
+                  <Select value={eventType} label="Tipo de Evento"
+                    onChange={(e) => setEventType(e.target.value)}>
+                    <MenuItem value="training">Entrenamiento</MenuItem>
+                    <MenuItem value="match">Partido</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
-
               <Grid item xs={12}>
-                <FormControl fullWidth required>
+                <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }} required fullWidth>
                   <InputLabel>Equipo</InputLabel>
-                  <Select
-                    value={formData.team}
-                    label="Equipo"
-                    onChange={(e) => handleInputChange('team', e.target.value)}
-                  >
-                    {teams.map((team) => (
-                      <MenuItem key={team} value={team}>{team}</MenuItem>
-                    ))}
+                  <Select value={formData.teamId} label="Equipo"
+                    onChange={(e) => handleInputChange('teamId', e.target.value)}>
+                    {teams.map(t => <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Grid>
-
               <Grid item xs={12}>
-                <FormControl fullWidth required>
+                <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }} required fullWidth>
                   <InputLabel>Entrenador</InputLabel>
-                  <Select
-                    value={formData.coach}
-                    label="Entrenador"
-                    onChange={(e) => handleInputChange('coach', e.target.value)}
-                  >
-                    {coaches.map((coach) => (
-                      <MenuItem key={coach} value={coach}>{coach}</MenuItem>
-                    ))}
+                  <Select value={formData.coachId} label="Entrenador"
+                    onChange={(e) => handleInputChange('coachId', e.target.value)}>
+                    {availableCoaches.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  required
-                  label="Fecha"
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => handleInputChange('date', e.target.value)}
-                  slotProps={{
-                    inputLabel: { shrink: true }
-                  }}
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  required
-                  label="Hora"
-                  type="time"
-                  value={formData.time}
-                  onChange={(e) => handleInputChange('time', e.target.value)}
-                  slotProps={{
-                    inputLabel: { shrink: true }
-                  }}
-                />
-              </Grid>
-
               <Grid item xs={12}>
-                <FormControl fullWidth required>
+                <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }} required fullWidth>
                   <InputLabel>Instalación</InputLabel>
-                  <Select
-                    value={formData.place}
-                    label="Instalación"
-                    onChange={(e) => handleInputChange('place', e.target.value)}
-                  >
-                    {places.map((place) => (
-                      <MenuItem key={place} value={place}>{place}</MenuItem>
-                    ))}
+                  <Select value={formData.placeId} label="Instalación"
+                    onChange={(e) => handleInputChange('placeId', e.target.value)}>
+                    {places.map(p => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Grid>
-
-              {eventType === 'Partido' && (
+              <Grid item xs={12} sm={4}>
+                <TextField fullWidth required type="date" label="Fecha"
+                  InputLabelProps={{ shrink: true }}
+                  value={formData.date}
+                  onChange={(e) => handleInputChange('date', e.target.value)} />
+              </Grid>
+              <Grid item xs={6} sm={4}>
+                <TextField fullWidth required type="time" label="Hora Llegada"
+                  InputLabelProps={{ shrink: true }}
+                  value={formData.arrivalTime}
+                  onChange={(e) => handleInputChange('arrivalTime', e.target.value)} />
+              </Grid>
+              <Grid item xs={6} sm={4}>
+                <TextField fullWidth required type="time" label="Hora Inicio"
+                  InputLabelProps={{ shrink: true }}
+                  value={formData.startTime}
+                  onChange={(e) => handleInputChange('startTime', e.target.value)} />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth label="Equipación" placeholder="Ej: Camiseta roja"
+                  value={formData.kit}
+                  onChange={(e) => handleInputChange('kit', e.target.value)} />
+              </Grid>
+              {eventType === 'match' && (
                 <>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      required
-                      label="Rival"
+                  <Grid item xs={12} sm={6}>
+                    <TextField fullWidth required label="Rival"
                       value={formData.opponent}
-                      onChange={(e) => handleInputChange('opponent', e.target.value)}
-                    />
+                      onChange={(e) => handleInputChange('opponent', e.target.value)} />
                   </Grid>
-                  <Grid item xs={12}>
-                    <FormControl fullWidth>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }} required fullWidth>
                       <InputLabel>Tipo de Partido</InputLabel>
-                      <Select
-                        value={formData.matchType}
-                        label="Tipo de Partido"
-                        onChange={(e) => handleInputChange('matchType', e.target.value)}
-                      >
+                      <Select value={formData.matchType} label="Tipo de Partido"
+                        onChange={(e) => handleInputChange('matchType', e.target.value)}>
                         <MenuItem value="Local">Local</MenuItem>
                         <MenuItem value="Visitante">Visitante</MenuItem>
                       </Select>
@@ -295,13 +519,9 @@ export default function Schedule() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancelar</Button>
-          <Button
-            onClick={handleSubmit}
-            variant="contained"
-            sx={{ bgcolor: '#2e7d32' }}
-            disabled={!formData.team || !formData.coach || !formData.date || !formData.time || !formData.place}
-          >
-            Crear Evento
+          <Button onClick={handleSubmit} variant="contained" sx={{ bgcolor: '#2e7d32' }}
+            disabled={!canSubmit}>
+            {editingEvent ? 'Actualizar' : 'Crear'} Evento
           </Button>
         </DialogActions>
       </Dialog>

@@ -1,4 +1,4 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Optional, List
 
 
@@ -8,7 +8,7 @@ class Team:
     id: str
     name: str
     category: str
-    coachId: Optional[str] = None
+    coachIds: List[str] = field(default_factory=list)
     schedule: Optional[List[dict]] = None
     ageGroup: Optional[str] = None
     maxCapacity: Optional[int] = None

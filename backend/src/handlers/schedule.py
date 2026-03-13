@@ -20,12 +20,25 @@ table = dynamodb.Table(os.environ['TABLE_NAME'])
 @app.get("/schedule")
 @tracer.capture_method
 def list_schedule():
-    """List all schedule entries"""
-    logger.info("Listing all schedule entries")
+    """List all schedule entries, optionally filtered by academy"""
+    academy = app.current_event.get_query_string_value("academy")
+    logger.info("Listing schedule", extra={"academy": academy})
     
     try:
-        result = table.scan()
+        if academy:
+            from boto3.dynamodb.conditions import Attr
+            result = table.scan(FilterExpression=Attr('academy').eq(academy))
+        else:
+            result = table.scan()
         items = result.get('Items', [])
+        
+        while 'LastEvaluatedKey' in result:
+            if academy:
+                result = table.scan(FilterExpression=Attr('academy').eq(academy), ExclusiveStartKey=result['LastEvaluatedKey'])
+            else:
+                result = table.scan(ExclusiveStartKey=result['LastEvaluatedKey'])
+            items.extend(result.get('Items', []))
+        
         logger.info(f"Found {len(items)} schedule entries")
         return {"schedule": items}
     except Exception as e:
@@ -65,11 +78,15 @@ def create_schedule():
             'id': str(uuid.uuid4()),
             'date': data.get('date'),
             'teamId': data.get('teamId'),
+            'coachId': data.get('coachId'),
             'placeId': data.get('placeId'),
             'startTime': data.get('startTime'),
             'endTime': data.get('endTime'),
+            'arrivalTime': data.get('arrivalTime'),
             'type': data.get('type', 'training'),
             'opponent': data.get('opponent'),
+            'kit': data.get('kit'),
+            'matchType': data.get('matchType'),
             'notes': data.get('notes'),
             'status': 'scheduled',
             'academy': data.get('academy'),
@@ -99,8 +116,9 @@ def update_schedule(schedule_id: str):
         expr_values = {}
         expr_names = {}
         
-        fields = ['date', 'teamId', 'placeId', 'startTime', 'endTime', 
-                  'type', 'opponent', 'notes', 'status', 'academy']
+        fields = ['date', 'teamId', 'coachId', 'placeId', 'startTime', 'endTime',
+                  'arrivalTime', 'type', 'opponent', 'kit', 'matchType', 'notes',
+                  'status', 'academy']
         
         for field in fields:
             if field in data:

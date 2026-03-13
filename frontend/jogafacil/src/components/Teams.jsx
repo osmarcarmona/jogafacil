@@ -28,10 +28,15 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Link
+  Link,
+  Tabs,
+  Tab,
+  List,
+  ListItem,
+  ListItemText
 } from '@mui/material'
-import { Add, People, Person, Delete, RemoveCircleOutline } from '@mui/icons-material'
-import { teamsApi, coachesApi, studentsApi } from '../services/api'
+import { Add, People, Person, Delete, RemoveCircleOutline, AccessTime, LocationOn } from '@mui/icons-material'
+import { teamsApi, coachesApi, studentsApi, scheduleApi, placesApi } from '../services/api'
 import { useAcademy } from '../context/AcademyContext'
 
 export default function Teams() {
@@ -47,6 +52,11 @@ export default function Teams() {
   const [openDetailsDialog, setOpenDetailsDialog] = useState(false)
   const [editingTeam, setEditingTeam] = useState(null)
   const [selectedTeam, setSelectedTeam] = useState(null)
+  const [places, setPlaces] = useState([])
+  const [detailsTab, setDetailsTab] = useState(0)
+  const [teamSchedule, setTeamSchedule] = useState([])
+  const [loadingSchedule, setLoadingSchedule] = useState(false)
+  const [scheduleError, setScheduleError] = useState(null)
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -61,12 +71,13 @@ export default function Teams() {
     loadTeams()
     loadCoaches()
     loadStudents()
-  }, [])
+    loadPlaces()
+  }, [academy])
 
   const loadTeams = async () => {
     try {
       setLoading(true)
-      const data = await teamsApi.getAll()
+      const data = await teamsApi.getAll(academy)
       setTeams(data.teams || [])
       setError(null)
     } catch (err) {
@@ -78,7 +89,7 @@ export default function Teams() {
 
   const loadCoaches = async () => {
     try {
-      const data = await coachesApi.getAll()
+      const data = await coachesApi.getAll(academy)
       setCoaches(data.coaches || [])
     } catch (err) {
       console.error('Error al cargar entrenadores:', err)
@@ -87,12 +98,23 @@ export default function Teams() {
 
   const loadStudents = async () => {
     try {
-      const data = await studentsApi.getAll()
+      const data = await studentsApi.getAll(academy)
       setStudents(data.students || [])
     } catch (err) {
       console.error('Error al cargar alumnos:', err)
     }
   }
+
+  const loadPlaces = async () => {
+    try {
+      const data = await placesApi.getAll(academy)
+      setPlaces(data.places || [])
+    } catch (err) {
+      console.error('Error al cargar instalaciones:', err)
+    }
+  }
+
+  const getName = (list, id) => list.find(i => i.id === id)?.name || id
 
   const handleOpenDialog = () => {
     setEditingTeam(null)
@@ -118,12 +140,12 @@ export default function Teams() {
     setSelectedTeam(team)
     setOpenDetailsDialog(true)
     setLoadingStudents(true)
-    
-    console.log('Team data:', team)
-    console.log('All students:', students)
+    setDetailsTab(0)
+    setTeamSchedule([])
+    setScheduleError(null)
+    setLoadingSchedule(true)
     
     // Filter students that belong to this team
-    // Handle both teamIds (array) and teamId (single) from backend
     const studentsInTeam = students.filter(student => {
       if (student.teamIds && Array.isArray(student.teamIds)) {
         return student.teamIds.includes(team.id)
@@ -133,16 +155,35 @@ export default function Teams() {
       }
       return false
     })
-    
-    console.log('Students in team:', studentsInTeam)
     setTeamStudents(studentsInTeam)
     setLoadingStudents(false)
+
+    // Fetch schedule events for this team
+    try {
+      const data = await scheduleApi.getAll(academy)
+      const allEvents = data.schedule || []
+      const filtered = allEvents
+        .filter(ev => ev.teamId === team.id)
+        .sort((a, b) => {
+          const dateCompare = (a.date || '').localeCompare(b.date || '')
+          if (dateCompare !== 0) return dateCompare
+          return (a.startTime || '').localeCompare(b.startTime || '')
+        })
+      setTeamSchedule(filtered)
+    } catch (err) {
+      setScheduleError('Error al cargar horario: ' + err.message)
+    } finally {
+      setLoadingSchedule(false)
+    }
   }
 
   const handleCloseDetailsDialog = () => {
     setOpenDetailsDialog(false)
     setSelectedTeam(null)
     setTeamStudents([])
+    setTeamSchedule([])
+    setScheduleError(null)
+    setDetailsTab(0)
   }
 
   const handleRemoveStudentFromTeam = async (student) => {
@@ -208,7 +249,7 @@ export default function Teams() {
     )
   }
 
-  const filteredTeams = teams.filter(t => !academy || t.academy === academy)
+  const filteredTeams = teams
 
   return (
     <Box>
@@ -247,9 +288,18 @@ export default function Teams() {
                   <Chip label={team.category} color="primary" size="small" sx={{ mb: 2 }} />
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <Person fontSize="small" color="action" />
-                    <Typography variant="body2" color="text.secondary">
-                      Coach ID: {team.coachId || 'Sin asignar'}
-                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+                      {(() => {
+                        const coachIdsList = team.coachIds || (team.coachId ? [team.coachId] : [])
+                        if (coachIdsList.length === 0) {
+                          return <Typography variant="body2" color="text.secondary">Sin entrenador</Typography>
+                        }
+                        return coachIdsList.map((cId) => {
+                          const coach = coaches.find(c => c.id === cId)
+                          return <Chip key={cId} label={coach ? coach.name : cId} size="small" variant="outlined" />
+                        })
+                      })()}
+                    </Box>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <People fontSize="small" color="action" />
@@ -289,7 +339,7 @@ export default function Teams() {
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth required>
+                <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }} required>
                   <InputLabel>Categoría</InputLabel>
                   <Select
                     value={formData.category}
@@ -313,7 +363,7 @@ export default function Teams() {
                 />
               </Grid>
               <Grid item xs={12}>
-                <FormControl fullWidth>
+                <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>
                   <InputLabel>Entrenadores</InputLabel>
                   <Select
                     multiple
@@ -383,135 +433,192 @@ export default function Teams() {
         <DialogTitle>Detalles del Equipo</DialogTitle>
         <DialogContent>
           {selectedTeam && (
-            <Box sx={{ pt: 2 }}>
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom>
-                    {selectedTeam.name}
-                  </Typography>
-                  <Chip label={selectedTeam.category} color="primary" size="small" sx={{ mb: 2 }} />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.50' }}>
-                    <Typography variant="subtitle2" color="primary" gutterBottom>
-                      Información General
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      <strong>Grupo de Edad:</strong> {selectedTeam.ageGroup}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      <strong>Capacidad Máxima:</strong> {selectedTeam.maxCapacity || 'N/A'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      <strong>Jugadores Actuales:</strong> {teamStudents.length}
-                    </Typography>
-                    {selectedTeam.createdAt && (
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
-                        <strong>Fecha de Creación:</strong> {new Date(selectedTeam.createdAt).toLocaleDateString()}
+            <Box sx={{ pt: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                <Typography variant="h6">{selectedTeam.name}</Typography>
+                <Chip label={selectedTeam.category} color="primary" size="small" />
+              </Box>
+              <Tabs value={detailsTab} onChange={(_, v) => setDetailsTab(v)} sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                <Tab label="Información" />
+                <Tab label="Horario" />
+              </Tabs>
+
+              {detailsTab === 0 && (
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.50' }}>
+                      <Typography variant="subtitle2" color="primary" gutterBottom>
+                        Información General
                       </Typography>
-                    )}
-                  </Paper>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.50' }}>
-                    <Typography variant="subtitle2" color="primary" gutterBottom>
-                      Entrenadores
-                    </Typography>
-                    {(() => {
-                      // Handle both coachIds (array) and coachId (single) from backend
-                      const coachIdsList = selectedTeam.coachIds || (selectedTeam.coachId ? [selectedTeam.coachId] : [])
-                      
-                      if (coachIdsList.length === 0) {
-                        return (
-                          <Typography variant="body2" color="text.secondary">
-                            Sin entrenadores asignados
-                          </Typography>
-                        )
-                      }
-                      
-                      return coachIdsList.map((coachId) => {
-                        const coach = coaches.find(c => c.id === coachId)
-                        if (coach) {
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        <strong>Grupo de Edad:</strong> {selectedTeam.ageGroup}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        <strong>Capacidad Máxima:</strong> {selectedTeam.maxCapacity || 'N/A'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        <strong>Jugadores Actuales:</strong> {teamStudents.length}
+                      </Typography>
+                      {selectedTeam.createdAt && (
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                          <strong>Fecha de Creación:</strong> {new Date(selectedTeam.createdAt).toLocaleDateString()}
+                        </Typography>
+                      )}
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.50' }}>
+                      <Typography variant="subtitle2" color="primary" gutterBottom>
+                        Entrenadores
+                      </Typography>
+                      {(() => {
+                        const coachIdsList = selectedTeam.coachIds || (selectedTeam.coachId ? [selectedTeam.coachId] : [])
+                        if (coachIdsList.length === 0) {
                           return (
-                            <Chip 
-                              key={coachId} 
-                              label={coach.name} 
-                              size="small" 
+                            <Typography variant="body2" color="text.secondary">
+                              Sin entrenadores asignados
+                            </Typography>
+                          )
+                        }
+                        return coachIdsList.map((coachId) => {
+                          const coach = coaches.find(c => c.id === coachId)
+                          return (
+                            <Chip
+                              key={coachId}
+                              label={coach ? coach.name : `ID: ${coachId}`}
+                              size="small"
+                              color={coach ? 'default' : 'default'}
                               sx={{ mr: 0.5, mb: 0.5 }}
                             />
                           )
-                        }
-                        // Show the ID if coach not found
-                        return (
-                          <Chip 
-                            key={coachId} 
-                            label={`ID: ${coachId}`} 
-                            size="small" 
-                            color="default"
-                            sx={{ mr: 0.5, mb: 0.5 }}
-                          />
-                        )
-                      })
-                    })()}
-                  </Paper>
+                        })
+                      })()}
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" color="primary" gutterBottom sx={{ mt: 2 }}>
+                      Lista de Jugadores ({teamStudents.length})
+                    </Typography>
+                    <Divider sx={{ mb: 2 }} />
+                    {loadingStudents ? (
+                      <Box display="flex" justifyContent="center" py={3}>
+                        <CircularProgress size={24} />
+                      </Box>
+                    ) : teamStudents.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary" align="center" py={3}>
+                        No hay jugadores en este equipo
+                      </Typography>
+                    ) : (
+                      <TableContainer sx={{ maxHeight: 400 }}>
+                        <Table size="small" stickyHeader>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>#</TableCell>
+                              <TableCell>Nombre</TableCell>
+                              <TableCell align="right">Acciones</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {teamStudents.map((student, index) => (
+                              <TableRow key={student.id} hover>
+                                <TableCell sx={{ width: 50 }}>{index + 1}</TableCell>
+                                <TableCell>
+                                  <Link
+                                    href={`?student=${student.id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    variant="body2"
+                                    underline="hover"
+                                    sx={{ cursor: 'pointer' }}
+                                  >
+                                    {student.name}
+                                  </Link>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleRemoveStudentFromTeam(student)}
+                                    title="Quitar del equipo"
+                                  >
+                                    <RemoveCircleOutline fontSize="small" />
+                                  </IconButton>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                  </Grid>
                 </Grid>
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" color="primary" gutterBottom sx={{ mt: 2 }}>
-                    Lista de Jugadores ({teamStudents.length})
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
-                  {loadingStudents ? (
-                    <Box display="flex" justifyContent="center" py={3}>
-                      <CircularProgress size={24} />
+              )}
+
+              {detailsTab === 1 && (
+                <Box>
+                  {loadingSchedule ? (
+                    <Box display="flex" justifyContent="center" py={4}>
+                      <CircularProgress size={28} />
                     </Box>
-                  ) : teamStudents.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary" align="center" py={3}>
-                      No hay jugadores en este equipo
+                  ) : scheduleError ? (
+                    <Alert severity="error" sx={{ my: 2 }}>{scheduleError}</Alert>
+                  ) : teamSchedule.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" align="center" py={4}>
+                      No hay eventos programados para este equipo
                     </Typography>
                   ) : (
-                    <TableContainer sx={{ maxHeight: 400 }}>
-                      <Table size="small" stickyHeader>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>#</TableCell>
-                            <TableCell>Nombre</TableCell>
-                            <TableCell align="right">Acciones</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {teamStudents.map((student, index) => (
-                            <TableRow key={student.id} hover>
-                              <TableCell sx={{ width: 50 }}>{index + 1}</TableCell>
-                              <TableCell>
-                                <Link
-                                  href={`?student=${student.id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  variant="body2"
-                                  underline="hover"
-                                  sx={{ cursor: 'pointer' }}
-                                >
-                                  {student.name}
-                                </Link>
-                              </TableCell>
-                              <TableCell align="right">
-                                <IconButton
+                    <List disablePadding>
+                      {teamSchedule.map((ev) => (
+                        <ListItem key={ev.id} divider>
+                          <ListItemText
+                            primary={
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Chip
+                                  label={ev.type === 'match' ? 'Partido' : 'Entrenamiento'}
                                   size="small"
-                                  color="error"
-                                  onClick={() => handleRemoveStudentFromTeam(student)}
-                                  title="Quitar del equipo"
-                                >
-                                  <RemoveCircleOutline fontSize="small" />
-                                </IconButton>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
+                                  sx={{
+                                    bgcolor: ev.type === 'match' ? 'warning.light' : 'success.light',
+                                    color: ev.type === 'match' ? 'warning.contrastText' : 'success.contrastText'
+                                  }}
+                                />
+                                {ev.type === 'match' && ev.opponent && (
+                                  <Typography variant="subtitle2">
+                                    vs {ev.opponent}
+                                  </Typography>
+                                )}
+                                {ev.type === 'match' && ev.matchType && (
+                                  <Chip label={ev.matchType} size="small" variant="outlined"
+                                    color={ev.matchType === 'Local' ? 'success' : 'warning'} />
+                                )}
+                              </Box>
+                            }
+                            secondary={
+                              <Box sx={{ mt: 0.5 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.3 }}>
+                                  <AccessTime sx={{ fontSize: 16 }} color="action" />
+                                  <Typography variant="body2" color="text.secondary">
+                                    {ev.date} — Llegada: {ev.arrivalTime} | Inicio: {ev.startTime}
+                                  </Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.3 }}>
+                                  <LocationOn sx={{ fontSize: 16 }} color="action" />
+                                  <Typography variant="body2" color="text.secondary">
+                                    {getName(places, ev.placeId)}
+                                  </Typography>
+                                </Box>
+                                <Typography variant="body2" color="text.secondary">
+                                  Entrenador: {getName(coaches, ev.coachId)}
+                                  {ev.kit ? ` | Equipación: ${ev.kit}` : ''}
+                                </Typography>
+                              </Box>
+                            }
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
                   )}
-                </Grid>
-              </Grid>
+                </Box>
+              )}
             </Box>
           )}
         </DialogContent>

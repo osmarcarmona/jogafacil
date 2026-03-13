@@ -20,12 +20,25 @@ table = dynamodb.Table(os.environ['TABLE_NAME'])
 @app.get("/coaches")
 @tracer.capture_method
 def list_coaches():
-    """List all coaches"""
-    logger.info("Listing all coaches")
+    """List all coaches, optionally filtered by academy"""
+    academy = app.current_event.get_query_string_value("academy")
+    logger.info("Listing coaches", extra={"academy": academy})
     
     try:
-        result = table.scan()
+        if academy:
+            from boto3.dynamodb.conditions import Attr
+            result = table.scan(FilterExpression=Attr('academy').eq(academy))
+        else:
+            result = table.scan()
         items = result.get('Items', [])
+        
+        while 'LastEvaluatedKey' in result:
+            if academy:
+                result = table.scan(FilterExpression=Attr('academy').eq(academy), ExclusiveStartKey=result['LastEvaluatedKey'])
+            else:
+                result = table.scan(ExclusiveStartKey=result['LastEvaluatedKey'])
+            items.extend(result.get('Items', []))
+        
         logger.info(f"Found {len(items)} coaches")
         return {"coaches": items}
     except Exception as e:

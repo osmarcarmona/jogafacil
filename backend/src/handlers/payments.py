@@ -21,12 +21,25 @@ table = dynamodb.Table(os.environ['TABLE_NAME'])
 @app.get("/payments")
 @tracer.capture_method
 def list_payments():
-    """List all payments"""
-    logger.info("Listing all payments")
+    """List all payments, optionally filtered by academy"""
+    academy = app.current_event.get_query_string_value("academy")
+    logger.info("Listing payments", extra={"academy": academy})
     
     try:
-        result = table.scan()
+        if academy:
+            from boto3.dynamodb.conditions import Attr
+            result = table.scan(FilterExpression=Attr('academy').eq(academy))
+        else:
+            result = table.scan()
         items = result.get('Items', [])
+        
+        while 'LastEvaluatedKey' in result:
+            if academy:
+                result = table.scan(FilterExpression=Attr('academy').eq(academy), ExclusiveStartKey=result['LastEvaluatedKey'])
+            else:
+                result = table.scan(ExclusiveStartKey=result['LastEvaluatedKey'])
+            items.extend(result.get('Items', []))
+        
         logger.info(f"Found {len(items)} payments")
         return {"payments": items}
     except Exception as e:

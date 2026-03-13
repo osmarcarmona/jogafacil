@@ -20,12 +20,25 @@ table = dynamodb.Table(os.environ['TABLE_NAME'])
 @app.get("/teams")
 @tracer.capture_method
 def list_teams():
-    """List all teams"""
-    logger.info("Listing all teams")
+    """List all teams, optionally filtered by academy"""
+    academy = app.current_event.get_query_string_value("academy")
+    logger.info("Listing teams", extra={"academy": academy})
     
     try:
-        result = table.scan()
+        if academy:
+            from boto3.dynamodb.conditions import Attr
+            result = table.scan(FilterExpression=Attr('academy').eq(academy))
+        else:
+            result = table.scan()
         items = result.get('Items', [])
+        
+        while 'LastEvaluatedKey' in result:
+            if academy:
+                result = table.scan(FilterExpression=Attr('academy').eq(academy), ExclusiveStartKey=result['LastEvaluatedKey'])
+            else:
+                result = table.scan(ExclusiveStartKey=result['LastEvaluatedKey'])
+            items.extend(result.get('Items', []))
+        
         logger.info(f"Found {len(items)} teams")
         return {"teams": items}
     except Exception as e:
@@ -65,7 +78,7 @@ def create_team():
             'id': str(uuid.uuid4()),
             'name': data.get('name'),
             'category': data.get('category'),
-            'coachId': data.get('coachId'),
+            'coachIds': data.get('coachIds', []),
             'schedule': data.get('schedule', []),
             'ageGroup': data.get('ageGroup'),
             'maxCapacity': data.get('maxCapacity'),
@@ -98,7 +111,7 @@ def update_team(team_id: str):
         expr_values = {}
         expr_names = {}
         
-        fields = ['name', 'category', 'coachId', 'schedule', 'ageGroup', 
+        fields = ['name', 'category', 'coachIds', 'schedule', 'ageGroup', 
                   'maxCapacity', 'currentSize', 'status', 'academy']
         
         for field in fields:

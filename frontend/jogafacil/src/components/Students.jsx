@@ -37,6 +37,7 @@ export default function Students() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [positionFilter, setPositionFilter] = useState('')
   const [openDialog, setOpenDialog] = useState(false)
   const [detailStudent, setDetailStudent] = useState(null)
   const [editingStudent, setEditingStudent] = useState(null)
@@ -55,12 +56,12 @@ export default function Students() {
   useEffect(() => {
     loadStudents()
     loadTeams()
-  }, [])
+  }, [academy])
 
   const loadStudents = async () => {
     try {
       setLoading(true)
-      const data = await studentsApi.getAll()
+      const data = await studentsApi.getAll(academy)
       setStudents(data.students || [])
       setError(null)
     } catch (err) {
@@ -72,7 +73,7 @@ export default function Students() {
 
   const loadTeams = async () => {
     try {
-      const data = await teamsApi.getAll()
+      const data = await teamsApi.getAll(academy)
       setTeams(data.teams || [])
     } catch (err) {
       console.error('Error al cargar equipos:', err)
@@ -147,8 +148,8 @@ export default function Students() {
 
   const filteredStudents = students.filter(student => {
     const matchesSearch = student.name?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesAcademy = !academy || student.academy === academy
-    return matchesSearch && matchesAcademy
+    const matchesPosition = !positionFilter || student.position === positionFilter
+    return matchesSearch && matchesPosition
   })
 
   if (loading) {
@@ -173,22 +174,41 @@ export default function Students() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {!academy && <Alert severity="warning" sx={{ mb: 2 }}>Selecciona una academia en el encabezado para ver y crear alumnos.</Alert>}
 
-      <TextField
-        fullWidth
-        placeholder="Buscar alumno..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        sx={{ mb: 3 }}
-        slotProps={{
-          input: {
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search />
-              </InputAdornment>
-            )
-          }
-        }}
-      />
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={8}>
+          <TextField
+            fullWidth
+            placeholder="Buscar alumno..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search />
+                  </InputAdornment>
+                )
+              }
+            }}
+          />
+        </Grid>
+        <Grid item xs={12} sm={4}>
+           <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>
+            <InputLabel>Posición</InputLabel>
+            <Select
+              value={positionFilter}
+              label="Posición"
+              onChange={(e) => setPositionFilter(e.target.value)}
+            >
+              <MenuItem value="">Todas</MenuItem>
+              <MenuItem value="Portero">Portero</MenuItem>
+              <MenuItem value="Defensa">Defensa</MenuItem>
+              <MenuItem value="Mediocampista">Mediocampista</MenuItem>
+              <MenuItem value="Delantero">Delantero</MenuItem>
+            </Select>
+          </FormControl>
+        </Grid>
+      </Grid>
 
       <TableContainer component={Paper}>
         <Table>
@@ -370,7 +390,7 @@ export default function Students() {
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
+                <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>
                   <InputLabel>Posición</InputLabel>
                   <Select
                     value={formData.position}
@@ -410,7 +430,7 @@ export default function Students() {
                 />
               </Grid>
               <Grid item xs={12}>
-                <FormControl fullWidth>
+                <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>
                   <InputLabel>Equipos</InputLabel>
                   <Select
                     multiple

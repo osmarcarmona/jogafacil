@@ -20,12 +20,25 @@ table = dynamodb.Table(os.environ['TABLE_NAME'])
 @app.get("/places")
 @tracer.capture_method
 def list_places():
-    """List all places"""
-    logger.info("Listing all places")
+    """List all places, optionally filtered by academy"""
+    academy = app.current_event.get_query_string_value("academy")
+    logger.info("Listing places", extra={"academy": academy})
     
     try:
-        result = table.scan()
+        if academy:
+            from boto3.dynamodb.conditions import Attr
+            result = table.scan(FilterExpression=Attr('academy').eq(academy))
+        else:
+            result = table.scan()
         items = result.get('Items', [])
+        
+        while 'LastEvaluatedKey' in result:
+            if academy:
+                result = table.scan(FilterExpression=Attr('academy').eq(academy), ExclusiveStartKey=result['LastEvaluatedKey'])
+            else:
+                result = table.scan(ExclusiveStartKey=result['LastEvaluatedKey'])
+            items.extend(result.get('Items', []))
+        
         logger.info(f"Found {len(items)} places")
         return {"places": items}
     except Exception as e:
@@ -66,6 +79,8 @@ def create_place():
             'name': data.get('name'),
             'address': data.get('address'),
             'capacity': data.get('capacity'),
+            'type': data.get('type'),
+            'lighting': data.get('lighting'),
             'facilities': data.get('facilities', []),
             'coordinates': data.get('coordinates'),
             'availability': data.get('availability', []),
@@ -98,8 +113,8 @@ def update_place(place_id: str):
         expr_values = {}
         expr_names = {}
         
-        fields = ['name', 'address', 'capacity', 'facilities', 'coordinates', 
-                  'availability', 'hourlyRate', 'status', 'academy']
+        fields = ['name', 'address', 'capacity', 'type', 'lighting', 'facilities',
+                  'coordinates', 'availability', 'hourlyRate', 'status', 'academy']
         
         for field in fields:
             if field in data:

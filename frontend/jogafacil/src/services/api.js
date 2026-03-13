@@ -28,7 +28,7 @@ async function apiRequest(url, options = {}) {
 
 // Students API
 export const studentsApi = {
-  getAll: () => apiRequest(endpoints.students),
+  getAll: (academy) => apiRequest(academy ? `${endpoints.students}?academy=${encodeURIComponent(academy)}` : endpoints.students),
   getById: (id) => apiRequest(`${endpoints.students}/${id}`),
   create: (data) => apiRequest(endpoints.students, {
     method: 'POST',
@@ -45,7 +45,7 @@ export const studentsApi = {
 
 // Coaches API
 export const coachesApi = {
-  getAll: () => apiRequest(endpoints.coaches),
+  getAll: (academy) => apiRequest(academy ? `${endpoints.coaches}?academy=${encodeURIComponent(academy)}` : endpoints.coaches),
   getById: (id) => apiRequest(`${endpoints.coaches}/${id}`),
   create: (data) => apiRequest(endpoints.coaches, {
     method: 'POST',
@@ -62,7 +62,7 @@ export const coachesApi = {
 
 // Teams API
 export const teamsApi = {
-  getAll: () => apiRequest(endpoints.teams),
+  getAll: (academy) => apiRequest(academy ? `${endpoints.teams}?academy=${encodeURIComponent(academy)}` : endpoints.teams),
   getById: (id) => apiRequest(`${endpoints.teams}/${id}`),
   create: (data) => apiRequest(endpoints.teams, {
     method: 'POST',
@@ -79,7 +79,7 @@ export const teamsApi = {
 
 // Places API
 export const placesApi = {
-  getAll: () => apiRequest(endpoints.places),
+  getAll: (academy) => apiRequest(academy ? `${endpoints.places}?academy=${encodeURIComponent(academy)}` : endpoints.places),
   getById: (id) => apiRequest(`${endpoints.places}/${id}`),
   create: (data) => apiRequest(endpoints.places, {
     method: 'POST',
@@ -96,7 +96,7 @@ export const placesApi = {
 
 // Schedule API
 export const scheduleApi = {
-  getAll: () => apiRequest(endpoints.schedule),
+  getAll: (academy) => apiRequest(academy ? `${endpoints.schedule}?academy=${encodeURIComponent(academy)}` : endpoints.schedule),
   getById: (id) => apiRequest(`${endpoints.schedule}/${id}`),
   create: (data) => apiRequest(endpoints.schedule, {
     method: 'POST',
@@ -119,7 +119,7 @@ export const academiesApi = {
 
 // Payments API
 export const paymentsApi = {
-  getAll: () => apiRequest(endpoints.payments),
+  getAll: (academy) => apiRequest(academy ? `${endpoints.payments}?academy=${encodeURIComponent(academy)}` : endpoints.payments),
   getById: (id) => apiRequest(`${endpoints.payments}/${id}`),
   create: (data) => apiRequest(endpoints.payments, {
     method: 'POST',

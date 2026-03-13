@@ -23,12 +23,13 @@ import {
   IconButton
 } from '@mui/material'
 import { Add, Email, Phone, Delete } from '@mui/icons-material'
-import { coachesApi } from '../services/api'
+import { coachesApi, teamsApi } from '../services/api'
 import { useAcademy } from '../context/AcademyContext'
 
 export default function Coaches() {
   const { academy } = useAcademy()
   const [coaches, setCoaches] = useState([])
+  const [teams, setTeams] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [openDialog, setOpenDialog] = useState(false)
@@ -49,18 +50,28 @@ export default function Coaches() {
 
   useEffect(() => {
     loadCoaches()
-  }, [])
+    loadTeams()
+  }, [academy])
 
   const loadCoaches = async () => {
     try {
       setLoading(true)
-      const data = await coachesApi.getAll()
+      const data = await coachesApi.getAll(academy)
       setCoaches(data.coaches || [])
       setError(null)
     } catch (err) {
       setError('Error al cargar entrenadores: ' + err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadTeams = async () => {
+    try {
+      const data = await teamsApi.getAll(academy)
+      setTeams(data.teams || [])
+    } catch (err) {
+      console.error('Error al cargar equipos:', err)
     }
   }
 
@@ -144,7 +155,14 @@ export default function Coaches() {
     )
   }
 
-  const filteredCoaches = coaches.filter(c => !academy || c.academy === academy)
+  const filteredCoaches = coaches
+
+  const getCoachTeams = (coachId) => {
+    return teams.filter(t => {
+      const coachIdsList = t.coachIds || (t.coachId ? [t.coachId] : [])
+      return coachIdsList.includes(coachId)
+    })
+  }
 
   return (
     <Box>
@@ -196,6 +214,19 @@ export default function Coaches() {
                     <Email fontSize="small" color="action" />
                     <Typography variant="body2">{coach.email}</Typography>
                   </Box>
+                  {(() => {
+                    const coachTeams = getCoachTeams(coach.id)
+                    return coachTeams.length > 0 ? (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Equipos:</Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {coachTeams.map((team) => (
+                            <Chip key={team.id} label={team.name} size="small" variant="outlined" />
+                          ))}
+                        </Box>
+                      </Box>
+                    ) : null
+                  })()}
                 </CardContent>
                 <CardActions>
                   <Button size="small" onClick={() => handleOpenDetailsDialog(coach)}>Ver Detalles</Button>
@@ -222,7 +253,7 @@ export default function Coaches() {
                 />
               </Grid>
               <Grid item xs={12}>
-                <FormControl fullWidth required>
+                <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }} required>
                   <InputLabel>Especialidad</InputLabel>
                   <Select
                     value={formData.specialty}
@@ -247,7 +278,6 @@ export default function Coaches() {
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  required
                   label="Email"
                   type="email"
                   value={formData.email}
@@ -289,7 +319,7 @@ export default function Coaches() {
             onClick={handleSubmit}
             variant="contained"
             sx={{ bgcolor: '#2e7d32' }}
-            disabled={!formData.name || !formData.specialty || !formData.phone || !formData.email}
+            disabled={!formData.name || !formData.specialty || !formData.phone}
           >
             {editingCoach ? 'Actualizar Entrenador' : 'Registrar Entrenador'}
           </Button>
@@ -351,6 +381,19 @@ export default function Coaches() {
                     </Typography>
                   </Grid>
                 )}
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    <strong>Equipos:</strong>
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {(() => {
+                      const coachTeams = getCoachTeams(selectedCoach.id)
+                      return coachTeams.length > 0
+                        ? coachTeams.map((team) => <Chip key={team.id} label={team.name} size="small" />)
+                        : <Typography variant="body2" color="text.secondary">Sin equipos asignados</Typography>
+                    })()}
+                  </Box>
+                </Grid>
               </Grid>
             </Box>
           )}
