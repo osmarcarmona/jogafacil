@@ -2,11 +2,14 @@ import json
 import os
 import uuid
 from datetime import datetime
+from decimal import Decimal
 import boto3
 from aws_lambda_powertools import Logger, Tracer
 from aws_lambda_powertools.event_handler import APIGatewayHttpResolver
 from aws_lambda_powertools.logging import correlation_paths
 from aws_lambda_powertools.utilities.typing import LambdaContext
+
+from services.inscription_payment import create_inscription_payment
 
 # Initialize Powertools
 logger = Logger()
@@ -16,6 +19,7 @@ app = APIGatewayHttpResolver()
 # DynamoDB setup
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table(os.environ['TABLE_NAME'])
+payments_table = dynamodb.Table(os.environ.get('PAYMENTS_TABLE_NAME', 'Payments'))
 
 
 @app.get("/students")
@@ -76,6 +80,14 @@ def create_student():
     logger.info("Creating student", extra={"data": data})
     
     try:
+        payment_window = data.get('paymentWindow', 1)
+        if payment_window not in (1, 2):
+            return {"error": "paymentWindow must be 1 or 2"}, 400
+
+        status = data.get('status', 'active')
+        if status not in ('active', 'inactive'):
+            return {"error": "status must be 'active' or 'inactive'"}, 400
+
         student = {
             'id': str(uuid.uuid4()),
             'name': data.get('name'),
@@ -87,7 +99,8 @@ def create_student():
             'address': data.get('address'),
             'emergencyContact': data.get('emergencyContact'),
             'emergencyPhone': data.get('emergencyPhone'),
-            'status': 'active',
+            'status': status,
+            'paymentWindow': payment_window,
             'academy': data.get('academy'),
             'createdAt': datetime.utcnow().isoformat(),
             'updatedAt': datetime.utcnow().isoformat()
@@ -98,7 +111,19 @@ def create_student():
         
         table.put_item(Item=student)
         logger.info(f"Student created successfully: {student['id']}")
-        
+
+        # Create inscription payment for active students
+        if student.get('status') == 'active':
+            try:
+                default_fee = Decimal(os.environ.get('DEFAULT_INSCRIPTION_FEE', '50'))
+                registration_date = student['createdAt'][:10]  # YYYY-MM-DD
+                inscription = create_inscription_payment(student, registration_date, default_fee)
+                if inscription:
+                    payments_table.put_item(Item=inscription)
+                    logger.info(f"Inscription payment created: {inscription['id']}")
+            except Exception as e:
+                logger.exception("Failed to create inscription payment, student was still created")
+
         return student, 201
     except Exception as e:
         logger.exception("Error creating student")
@@ -113,12 +138,19 @@ def update_student(student_id: str):
     logger.info(f"Updating student: {student_id}", extra={"data": data})
     
     try:
+        # Validate paymentWindow if provided
+        if 'paymentWindow' in data and data['paymentWindow'] not in (1, 2):
+            return {"error": "paymentWindow must be 1 or 2"}, 400
+        # Validate status if provided
+        if 'status' in data and data['status'] not in ('active', 'inactive'):
+            return {"error": "status must be 'active' or 'inactive'"}, 400
+
         update_expr = 'SET '
         expr_values = {}
         expr_names = {}
         
         fields = ['name', 'email', 'phone', 'teamIds', 'position', 'dateOfBirth', 
-                  'address', 'emergencyContact', 'emergencyPhone', 'status', 'academy']
+                  'address', 'emergencyContact', 'emergencyPhone', 'status', 'paymentWindow', 'academy']
         
         for field in fields:
             if field in data:

@@ -17,6 +17,7 @@ export const endpoints = {
   places: `${API_URL}/places`,
   schedule: `${API_URL}/schedule`,
   payments: `${API_URL}/payments`,
+  paymentTypes: `${API_URL}/payment-types`,
   academies: `${API_URL}/academies`,
 };
 

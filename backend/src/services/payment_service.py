@@ -18,13 +18,16 @@ class PaymentService(BaseService):
         payment = {
             'id': str(uuid.uuid4()),
             'studentId': data.get('studentId'),
+            'studentName': data.get('studentName'),
             'amount': Decimal(str(data.get('amount', 0))),
+            'month': data.get('month'),
             'dueDate': data.get('dueDate'),
             'paidDate': data.get('paidDate'),
             'status': data.get('status', 'pending'),
             'method': data.get('method'),
             'reference': data.get('reference'),
             'description': data.get('description'),
+            'academy': data.get('academy'),
             'createdAt': datetime.utcnow().isoformat(),
             'updatedAt': datetime.utcnow().isoformat()
         }
@@ -38,7 +41,8 @@ class PaymentService(BaseService):
         """Update payment"""
         updates = {}
         
-        fields = ['studentId', 'dueDate', 'paidDate', 'status', 'method', 'reference', 'description']
+        fields = ['studentId', 'studentName', 'month', 'dueDate', 'paidDate',
+                  'status', 'method', 'reference', 'description', 'academy']
         
         for field in fields:
             if field in data:

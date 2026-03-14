@@ -10,6 +10,7 @@ from .team import Team
 from .place import Place
 from .schedule import Schedule
 from .payment import Payment
+from .payment_type_template import PaymentTypeTemplate
 from .academy import Academy
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     'Place',
     'Schedule',
     'Payment',
+    'PaymentTypeTemplate',
     'Academy'
 ]

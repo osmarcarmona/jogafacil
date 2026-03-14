@@ -77,6 +77,18 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/${ProjectName}-academies-${Environment}'
       RetentionInDays: 7
 
+  PaymentTypesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-payment-types-${Environment}'
+      RetentionInDays: 7
+
+  ScheduledPaymentGenLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-scheduled-payment-gen-${Environment}'
+      RetentionInDays: 7
+
   # DynamoDB Tables
   StudentsTable:
     Type: AWS::DynamoDB::Table
@@ -180,6 +192,23 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
+  PaymentTypeTemplatesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-payment-type-templates-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
   AcademiesTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -233,6 +262,7 @@ Resources:
                   - !GetAtt PaymentsTable.Arn
                   - !Sub '${PaymentsTable.Arn}/index/*'
                   - !GetAtt AcademiesTable.Arn
+                  - !GetAtt PaymentTypeTemplatesTable.Arn
 
   # API Gateway
   ApiGateway:
@@ -263,6 +293,8 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref StudentsTable
+          PAYMENTS_TABLE_NAME: !Ref PaymentsTable
+          DEFAULT_INSCRIPTION_FEE: '50'
       Events:
         ListStudents:
           Type: HttpApi
@@ -485,6 +517,7 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref PaymentsTable
+          STUDENTS_TABLE_NAME: !Ref StudentsTable
       Events:
         ListPayments:
           Type: HttpApi
@@ -504,11 +537,29 @@ Resources:
             ApiId: !Ref ApiGateway
             Path: /payments
             Method: POST
+        GeneratePayments:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payments/generate
+            Method: POST
         UpdatePayment:
           Type: HttpApi
           Properties:
             ApiId: !Ref ApiGateway
             Path: /payments/{id}
+            Method: PUT
+        MarkPaymentPaid:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payments/{id}/pay
+            Method: PUT
+        UpdatePaymentHistory:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payments/{id}/history
             Method: PUT
         DeletePayment:
           Type: HttpApi
@@ -545,7 +596,73 @@ Resources:
       Tags:
         Environment: !Ref Environment
 
+  PaymentTypesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-payment-types-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.payment_types.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref PaymentTypeTemplatesTable
+      Events:
+        ListPaymentTypes:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payment-types
+            Method: GET
+        GetPaymentType:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payment-types/{id}
+            Method: GET
+        CreatePaymentType:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payment-types
+            Method: POST
+        UpdatePaymentType:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payment-types/{id}
+            Method: PUT
+        DeletePaymentType:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /payment-types/{id}
+            Method: DELETE
+      Tags:
+        Environment: !Ref Environment
 
+  ScheduledPaymentGenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-scheduled-payment-gen-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.scheduled_payment_generation.handler
+      Timeout: 60
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          PAYMENTS_TABLE_NAME: !Ref PaymentsTable
+          STUDENTS_TABLE_NAME: !Ref StudentsTable
+          ACADEMIES_TABLE_NAME: !Ref AcademiesTable
+          DEFAULT_MONTHLY_FEE: '100'
+      Events:
+        DailySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(5 0 * * ? *)
+            Description: Trigger scheduled payment generation daily at 00:05 UTC
+            Enabled: true
+      Tags:
+        Environment: !Ref Environment
 
 Outputs:
   ApiEndpoint:
@@ -601,3 +718,9 @@ Outputs:
     Value: !Ref AcademiesTable
     Export:
       Name: !Sub '${ProjectName}-academies-table-${Environment}'
+
+  PaymentTypeTemplatesTableName:
+    Description: Payment Type Templates DynamoDB table name
+    Value: !Ref PaymentTypeTemplatesTable
+    Export:
+      Name: !Sub '${ProjectName}-payment-type-templates-table-${Environment}'

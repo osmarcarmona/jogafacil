@@ -117,6 +117,23 @@ export const academiesApi = {
   getById: (id) => apiRequest(`${endpoints.academies}/${id}`),
 };
 
+// Payment Types API
+export const paymentTypesApi = {
+  getAll: (academy) => apiRequest(academy ? `${endpoints.paymentTypes}?academy=${encodeURIComponent(academy)}` : endpoints.paymentTypes),
+  getById: (id) => apiRequest(`${endpoints.paymentTypes}/${id}`),
+  create: (data) => apiRequest(endpoints.paymentTypes, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id, data) => apiRequest(`${endpoints.paymentTypes}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id) => apiRequest(`${endpoints.paymentTypes}/${id}`, {
+    method: 'DELETE',
+  }),
+};
+
 // Payments API
 export const paymentsApi = {
   getAll: (academy) => apiRequest(academy ? `${endpoints.payments}?academy=${encodeURIComponent(academy)}` : endpoints.payments),
@@ -131,5 +148,17 @@ export const paymentsApi = {
   }),
   delete: (id) => apiRequest(`${endpoints.payments}/${id}`, {
     method: 'DELETE',
+  }),
+  markPaid: (id, data) => apiRequest(`${endpoints.payments}/${id}/pay`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  updateHistory: (id, data) => apiRequest(`${endpoints.payments}/${id}/history`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  generate: (data) => apiRequest(`${endpoints.payments}/generate`, {
+    method: 'POST',
+    body: JSON.stringify(data),
   }),
 };

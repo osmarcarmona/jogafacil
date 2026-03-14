@@ -50,7 +50,9 @@ export default function Students() {
     dateOfBirth: '',
     address: '',
     emergencyContact: '',
-    emergencyPhone: ''
+    emergencyPhone: '',
+    paymentWindow: 1,
+    status: 'active'
   })
 
   useEffect(() => {
@@ -96,7 +98,9 @@ export default function Students() {
       dateOfBirth: student.dateOfBirth || '',
       address: student.address || '',
       emergencyContact: student.emergencyContact || '',
-      emergencyPhone: student.emergencyPhone || ''
+      emergencyPhone: student.emergencyPhone || '',
+      paymentWindow: student.paymentWindow ?? 1,
+      status: student.status || 'active'
     })
     setOpenDialog(true)
   }
@@ -113,7 +117,9 @@ export default function Students() {
       dateOfBirth: '',
       address: '',
       emergencyContact: '',
-      emergencyPhone: ''
+      emergencyPhone: '',
+      paymentWindow: 1,
+      status: 'active'
     })
   }
 
@@ -219,6 +225,7 @@ export default function Students() {
               <TableCell>Fecha de Nacimiento</TableCell>
               <TableCell>Teléfono</TableCell>
               <TableCell>Equipos</TableCell>
+              <TableCell>Ventana de Pago</TableCell>
               <TableCell>Estado</TableCell>
               <TableCell align="right">Acciones</TableCell>
             </TableRow>
@@ -226,7 +233,7 @@ export default function Students() {
           <TableBody>
             {filteredStudents.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center">
+                <TableCell colSpan={8} align="center">
                   No hay alumnos registrados
                 </TableCell>
               </TableRow>
@@ -247,8 +254,15 @@ export default function Students() {
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={student.status || 'Activo'}
-                      color={student.status === 'active' ? 'success' : 'default'}
+                      label={student.paymentWindow === 2 ? 'Ventana 2' : 'Ventana 1'}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={student.status === 'inactive' ? 'Inactivo' : 'Activo'}
+                      color={student.status === 'inactive' ? 'default' : 'success'}
                       size="small"
                     />
                   </TableCell>
@@ -299,10 +313,14 @@ export default function Students() {
                 <Grid item xs={6}>
                   <Typography variant="subtitle2" color="text.secondary">Estado</Typography>
                   <Chip
-                    label={detailStudent.status || 'Activo'}
-                    color={detailStudent.status === 'active' ? 'success' : 'default'}
+                    label={detailStudent.status === 'inactive' ? 'Inactivo' : 'Activo'}
+                    color={detailStudent.status === 'inactive' ? 'default' : 'success'}
                     size="small"
                   />
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" color="text.secondary">Ventana de Pago</Typography>
+                  <Typography>{detailStudent.paymentWindow === 2 ? 'Ventana 2 (15–20)' : 'Ventana 1 (1–5)'}</Typography>
                 </Grid>
                 <Grid item xs={12}>
                   <Typography variant="subtitle2" color="text.secondary">Dirección</Typography>
@@ -428,6 +446,32 @@ export default function Students() {
                   value={formData.emergencyPhone}
                   onChange={(e) => handleInputChange('emergencyPhone', e.target.value)}
                 />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Ventana de Pago</InputLabel>
+                  <Select
+                    value={formData.paymentWindow}
+                    label="Ventana de Pago"
+                    onChange={(e) => handleInputChange('paymentWindow', e.target.value)}
+                  >
+                    <MenuItem value={1}>Ventana 1 (1–5)</MenuItem>
+                    <MenuItem value={2}>Ventana 2 (15–20)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Estado</InputLabel>
+                  <Select
+                    value={formData.status}
+                    label="Estado"
+                    onChange={(e) => handleInputChange('status', e.target.value)}
+                  >
+                    <MenuItem value="active">Activo</MenuItem>
+                    <MenuItem value="inactive">Inactivo</MenuItem>
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12}>
                 <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>

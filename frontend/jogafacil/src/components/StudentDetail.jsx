@@ -58,7 +58,9 @@ export default function StudentDetail({ studentId }) {
       dateOfBirth: student.dateOfBirth || '',
       address: student.address || '',
       emergencyContact: student.emergencyContact || '',
-      emergencyPhone: student.emergencyPhone || ''
+      emergencyPhone: student.emergencyPhone || '',
+      paymentWindow: student.paymentWindow ?? 1,
+      status: student.status || 'active'
     })
     setEditing(true)
     setSuccessMsg(null)
@@ -170,6 +172,24 @@ export default function StudentDetail({ studentId }) {
               <Grid item xs={6}>
                 <TextField fullWidth label="Teléfono de Emergencia" value={formData.emergencyPhone} onChange={(e) => handleChange('emergencyPhone', e.target.value)} />
               </Grid>
+              <Grid item xs={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Ventana de Pago</InputLabel>
+                  <Select value={formData.paymentWindow} label="Ventana de Pago" onChange={(e) => handleChange('paymentWindow', e.target.value)}>
+                    <MenuItem value={1}>Ventana 1 (1–5)</MenuItem>
+                    <MenuItem value={2}>Ventana 2 (15–20)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Estado</InputLabel>
+                  <Select value={formData.status} label="Estado" onChange={(e) => handleChange('status', e.target.value)}>
+                    <MenuItem value="active">Activo</MenuItem>
+                    <MenuItem value="inactive">Inactivo</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
               <Grid item xs={12}>
                 <FormControl fullWidth>
                   <InputLabel>Equipos</InputLabel>
@@ -224,7 +244,11 @@ export default function StudentDetail({ studentId }) {
               </Grid>
               <Grid item xs={6}>
                 <Typography variant="subtitle2" color="text.secondary">Estado</Typography>
-                <Chip label={student.status || 'Activo'} color={student.status === 'active' ? 'success' : 'default'} size="small" />
+                <Chip label={student.status === 'inactive' ? 'Inactivo' : 'Activo'} color={student.status === 'inactive' ? 'default' : 'success'} size="small" />
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="subtitle2" color="text.secondary">Ventana de Pago</Typography>
+                <Typography>{student.paymentWindow === 2 ? 'Ventana 2 (15–20)' : 'Ventana 1 (1–5)'}</Typography>
               </Grid>
               <Grid item xs={12}>
                 <Typography variant="subtitle2" color="text.secondary">Dirección</Typography>
