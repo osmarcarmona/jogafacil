@@ -5,14 +5,17 @@ import {
   FormControl, InputLabel, Select, MenuItem, Grid, CircularProgress,
   Alert, IconButton, ToggleButtonGroup, ToggleButton, Tooltip
 } from '@mui/material'
-import { LocationOn, AccessTime, Add, Delete, Edit, ViewList, CalendarMonth, ChevronLeft, ChevronRight } from '@mui/icons-material'
-import { scheduleApi, teamsApi, coachesApi, placesApi } from '../services/api'
+import { LocationOn, AccessTime, Add, Delete, Edit, ViewList, CalendarMonth, ChevronLeft, ChevronRight, Visibility } from '@mui/icons-material'
+import { scheduleApi, teamsApi, coachesApi, placesApi, studentsApi } from '../services/api'
 import { useAcademy } from '../context/AcademyContext'
+import RosterSelector from './RosterSelector'
+import { filterPlayersByTeam } from '../utils/rosterUtils'
 
 const initialFormData = {
   teamId: '', coachId: '', placeId: '', date: '',
   arrivalTime: '', startTime: '', kit: '',
-  opponent: '', matchType: 'Local'
+  opponent: '', matchType: 'Local',
+  roster: []
 }
 
 export default function Schedule() {
@@ -22,6 +25,7 @@ export default function Schedule() {
   const [teams, setTeams] = useState([])
   const [coaches, setCoaches] = useState([])
   const [places, setPlaces] = useState([])
+  const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [openDialog, setOpenDialog] = useState(false)
@@ -48,20 +52,23 @@ export default function Schedule() {
   const [viewMode, setViewMode] = useState('list') // 'list' | 'calendar'
   const [calendarMode, setCalendarMode] = useState('month') // 'month' | 'week'
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [detailEvent, setDetailEvent] = useState(null)
 
   useEffect(() => { loadAll() }, [academy])
 
   const loadAll = async () => {
     try {
       setLoading(true)
-      const [sData, tData, cData, pData] = await Promise.all([
+      const [sData, tData, cData, pData, stData] = await Promise.all([
         scheduleApi.getAll(academy), teamsApi.getAll(academy),
-        coachesApi.getAll(academy), placesApi.getAll(academy)
+        coachesApi.getAll(academy), placesApi.getAll(academy),
+        studentsApi.getAll(academy)
       ])
       setEvents(sData.schedule || [])
       setTeams(tData.teams || [])
       setCoaches(cData.coaches || [])
       setPlaces(pData.places || [])
+      setStudents(stData.students || [])
       setError(null)
     } catch (err) {
       setError('Error al cargar datos: ' + err.message)
@@ -96,7 +103,8 @@ export default function Schedule() {
       placeId: ev.placeId || '', date: ev.date || '',
       arrivalTime: ev.arrivalTime || '', startTime: ev.startTime || '',
       kit: ev.kit || '', opponent: ev.opponent || '',
-      matchType: ev.matchType || 'Local'
+      matchType: ev.matchType || 'Local',
+      roster: ev.roster || []
     })
     setOpenDialog(true)
   }
@@ -110,6 +118,7 @@ export default function Schedule() {
         const team = teams.find(t => t.id === value)
         const ids = team?.coachIds || (team?.coachId ? [team.coachId] : [])
         updated.coachId = ids.length === 1 ? ids[0] : ''
+        updated.roster = []
       }
       return updated
     })
@@ -117,7 +126,7 @@ export default function Schedule() {
   const handleSubmit = async () => {
     try {
       const payload = { ...formData, type: eventType, academy }
-      if (eventType === 'training') { delete payload.opponent; delete payload.matchType }
+      if (eventType === 'training') { delete payload.opponent; delete payload.matchType; delete payload.roster }
       if (editingEvent) await scheduleApi.update(editingEvent.id, payload)
       else await scheduleApi.create(payload)
       handleCloseDialog(); loadAll()
@@ -156,6 +165,9 @@ export default function Schedule() {
       ) : items.map((ev) => (
         <ListItem key={ev.id} divider secondaryAction={
           <Box>
+            {isMatch && (
+              <Button size="small" startIcon={<Visibility fontSize="small" />} onClick={() => setDetailEvent(ev)}>Ver</Button>
+            )}
             <Button size="small" onClick={() => handleOpenEditDialog(ev)}>Editar</Button>
             <IconButton size="small" color="error" onClick={() => handleDelete(ev.id)}>
               <Delete fontSize="small" />
@@ -193,6 +205,11 @@ export default function Schedule() {
                   Entrenador: {getName(coaches, ev.coachId)}
                   {ev.kit ? ` | Equipación: ${ev.kit}` : ''}
                 </Typography>
+                {isMatch && ev.roster && ev.roster.length > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Convocados: {ev.roster.length}
+                  </Typography>
+                )}
               </Box>
             }
           />
@@ -512,6 +529,15 @@ export default function Schedule() {
                       </Select>
                     </FormControl>
                   </Grid>
+                  {formData.teamId && (
+                    <Grid item xs={12}>
+                      <RosterSelector
+                        players={filterPlayersByTeam(students, formData.teamId)}
+                        selectedIds={formData.roster}
+                        onChange={(newRoster) => setFormData(prev => ({ ...prev, roster: newRoster }))}
+                      />
+                    </Grid>
+                  )}
                 </>
               )}
             </Grid>
@@ -524,6 +550,64 @@ export default function Schedule() {
             {editingEvent ? 'Actualizar' : 'Crear'} Evento
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Match Detail Dialog */}
+      <Dialog open={!!detailEvent} onClose={() => setDetailEvent(null)} maxWidth="sm" fullWidth>
+        {detailEvent && (
+          <>
+            <DialogTitle>
+              {getName(teams, detailEvent.teamId)}
+              {detailEvent.opponent ? ` vs ${detailEvent.opponent}` : ''}
+              {detailEvent.matchType && (
+                <Chip label={detailEvent.matchType} size="small" sx={{ ml: 1 }}
+                  color={detailEvent.matchType === 'Local' ? 'success' : 'warning'} />
+              )}
+            </DialogTitle>
+            <DialogContent>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, pt: 1 }}>
+                <Typography variant="body2">
+                  <AccessTime fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />
+                  {detailEvent.date} — Llegada: {detailEvent.arrivalTime} | Inicio: {detailEvent.startTime}
+                </Typography>
+                <Typography variant="body2">
+                  <LocationOn fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />
+                  {getName(places, detailEvent.placeId)}
+                </Typography>
+                <Typography variant="body2">
+                  Entrenador: {getName(coaches, detailEvent.coachId)}
+                  {detailEvent.kit ? ` | Equipación: ${detailEvent.kit}` : ''}
+                </Typography>
+
+                {detailEvent.roster && detailEvent.roster.length > 0 ? (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>
+                      Convocados ({detailEvent.roster.length}):
+                    </Typography>
+                    <List dense>
+                      {detailEvent.roster.map((playerId, idx) => (
+                        <ListItem key={playerId} sx={{ py: 0.25 }}>
+                          <ListItemText primary={`${idx + 1}. ${getName(students, playerId)}`} />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                    No hay convocados definidos para este partido.
+                  </Typography>
+                )}
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setDetailEvent(null)}>Cerrar</Button>
+              <Button variant="contained" sx={{ bgcolor: '#2e7d32' }}
+                onClick={() => { handleOpenEditDialog(detailEvent); setDetailEvent(null) }}>
+                Editar
+              </Button>
+            </DialogActions>
+          </>
+        )}
       </Dialog>
     </Box>
   )

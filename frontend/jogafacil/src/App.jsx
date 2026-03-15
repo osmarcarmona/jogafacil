@@ -140,7 +140,7 @@ function App() {
             >
               <MenuItem value="" disabled>Seleccionar Academia</MenuItem>
               {academies.map((a) => (
-                <MenuItem key={a.id || a} value={a.name || a}>{a.name || a}</MenuItem>
+                <MenuItem key={a.id || a} value={a.id || a}>{a.name || a}</MenuItem>
               ))}
             </Select>
           </FormControl>

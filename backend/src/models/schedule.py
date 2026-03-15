@@ -1,5 +1,5 @@
-from dataclasses import dataclass, asdict
-from typing import Optional
+from dataclasses import dataclass, asdict, field
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -17,6 +17,7 @@ class Schedule:
     notes: Optional[str] = None
     status: str = 'scheduled'
     academy: Optional[str] = None
+    roster: Optional[List[str]] = None
     createdAt: Optional[str] = None
     updatedAt: Optional[str] = None
 

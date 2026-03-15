@@ -88,6 +88,7 @@ def create_schedule():
             'kit': data.get('kit'),
             'matchType': data.get('matchType'),
             'notes': data.get('notes'),
+            'roster': data.get('roster'),
             'status': 'scheduled',
             'academy': data.get('academy'),
             'createdAt': datetime.utcnow().isoformat(),
@@ -118,7 +119,7 @@ def update_schedule(schedule_id: str):
         
         fields = ['date', 'teamId', 'coachId', 'placeId', 'startTime', 'endTime',
                   'arrivalTime', 'type', 'opponent', 'kit', 'matchType', 'notes',
-                  'status', 'academy']
+                  'status', 'academy', 'roster']
         
         for field in fields:
             if field in data:
