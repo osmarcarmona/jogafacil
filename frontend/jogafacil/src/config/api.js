@@ -19,6 +19,8 @@ export const endpoints = {
   payments: `${API_URL}/payments`,
   paymentTypes: `${API_URL}/payment-types`,
   academies: `${API_URL}/academies`,
+  auth: `${API_URL}/auth`,
+  users: `${API_URL}/users`,
 };
 
 export default apiConfig;

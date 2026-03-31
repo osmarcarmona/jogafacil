@@ -10,6 +10,7 @@ from aws_lambda_powertools.logging import correlation_paths
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
 from services.inscription_payment import create_inscription_payment
+from middleware.auth_middleware import require_auth
 
 # Initialize Powertools
 logger = Logger()
@@ -23,6 +24,7 @@ payments_table = dynamodb.Table(os.environ.get('PAYMENTS_TABLE_NAME', 'Payments'
 
 
 @app.get("/students")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def list_students():
     """List all students, optionally filtered by academy"""
@@ -53,6 +55,7 @@ def list_students():
 
 
 @app.get("/students/<student_id>")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def get_student(student_id: str):
     """Get a single student by ID"""
@@ -73,6 +76,7 @@ def get_student(student_id: str):
 
 
 @app.post("/students")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def create_student():
     """Create a new student"""
@@ -131,6 +135,7 @@ def create_student():
 
 
 @app.put("/students/<student_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def update_student(student_id: str):
     """Update an existing student"""
@@ -180,6 +185,7 @@ def update_student(student_id: str):
 
 
 @app.delete("/students/<student_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def delete_student(student_id: str):
     """Delete a student"""

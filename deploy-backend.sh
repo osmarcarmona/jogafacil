@@ -8,6 +8,13 @@ STAGE=${1:-dev}
 STACK_NAME="jogafacil-backend-${STAGE}"
 REGION=${AWS_REGION:-us-west-1}
 PROFILE="debitech"
+JWT_SECRET=${JWT_SECRET:-""}
+
+if [ -z "$JWT_SECRET" ]; then
+  echo "Error: JWT_SECRET environment variable is required."
+  echo "Usage: JWT_SECRET=your-secret-key ./deploy-backend.sh [stage]"
+  exit 1
+fi
 
 echo "Deploying JogaFacil backend to ${STAGE} environment in ${REGION} using profile ${PROFILE}"
 
@@ -20,7 +27,7 @@ echo "Packaging and deploying backend stack..."
 sam deploy \
   --template-file .aws-sam/build/template.yaml \
   --stack-name ${STACK_NAME} \
-  --parameter-overrides Stage=${STAGE} Environment=${STAGE} \
+  --parameter-overrides Stage=${STAGE} Environment=${STAGE} JwtSecret=${JWT_SECRET} \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
   --region ${REGION} \
   --config-env ${STAGE} \

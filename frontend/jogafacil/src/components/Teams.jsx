@@ -38,9 +38,11 @@ import {
 import { Add, People, Person, Delete, RemoveCircleOutline, AccessTime, LocationOn } from '@mui/icons-material'
 import { teamsApi, coachesApi, studentsApi, scheduleApi, placesApi } from '../services/api'
 import { useAcademy } from '../context/AcademyContext'
+import { useAuth } from '../context/AuthContext'
 
 export default function Teams() {
   const { academy } = useAcademy()
+  const { isAdmin } = useAuth()
   const [teams, setTeams] = useState([])
   const [coaches, setCoaches] = useState([])
   const [students, setStudents] = useState([])
@@ -257,9 +259,11 @@ export default function Teams() {
         <Typography variant="h4" fontWeight="bold">
           Equipos
         </Typography>
-        <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: '#2e7d32' }} onClick={handleOpenDialog}>
-          Nuevo Equipo
-        </Button>
+        {isAdmin && (
+          <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: '#2e7d32' }} onClick={handleOpenDialog}>
+            Nuevo Equipo
+          </Button>
+        )}
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -281,9 +285,11 @@ export default function Teams() {
                     <Typography variant="h5" gutterBottom fontWeight="bold">
                       {team.name}
                     </Typography>
-                    <IconButton size="small" color="error" onClick={() => handleDelete(team.id)}>
-                      <Delete fontSize="small" />
-                    </IconButton>
+                    {isAdmin && (
+                      <IconButton size="small" color="error" onClick={() => handleDelete(team.id)}>
+                        <Delete fontSize="small" />
+                      </IconButton>
+                    )}
                   </Box>
                   <Chip label={team.category} color="primary" size="small" sx={{ mb: 2 }} />
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -315,7 +321,7 @@ export default function Teams() {
                 </CardContent>
                 <CardActions>
                   <Button size="small" onClick={() => handleOpenDetailsDialog(team)}>Ver Detalles</Button>
-                  <Button size="small" onClick={() => handleOpenEditDialog(team)}>Editar</Button>
+                  {isAdmin && <Button size="small" onClick={() => handleOpenEditDialog(team)}>Editar</Button>}
                 </CardActions>
               </Card>
             </Grid>
@@ -515,7 +521,7 @@ export default function Teams() {
                             <TableRow>
                               <TableCell>#</TableCell>
                               <TableCell>Nombre</TableCell>
-                              <TableCell align="right">Acciones</TableCell>
+                              {isAdmin && <TableCell align="right">Acciones</TableCell>}
                             </TableRow>
                           </TableHead>
                           <TableBody>
@@ -534,16 +540,18 @@ export default function Teams() {
                                     {student.name}
                                   </Link>
                                 </TableCell>
-                                <TableCell align="right">
-                                  <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => handleRemoveStudentFromTeam(student)}
-                                    title="Quitar del equipo"
-                                  >
-                                    <RemoveCircleOutline fontSize="small" />
-                                  </IconButton>
-                                </TableCell>
+                                {isAdmin && (
+                                  <TableCell align="right">
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() => handleRemoveStudentFromTeam(student)}
+                                      title="Quitar del equipo"
+                                    >
+                                      <RemoveCircleOutline fontSize="small" />
+                                    </IconButton>
+                                  </TableCell>
+                                )}
                               </TableRow>
                             ))}
                           </TableBody>
@@ -624,16 +632,18 @@ export default function Teams() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDetailsDialog}>Cerrar</Button>
-          <Button 
-            onClick={() => {
-              handleCloseDetailsDialog()
-              handleOpenEditDialog(selectedTeam)
-            }}
-            variant="contained"
-            sx={{ bgcolor: '#2e7d32' }}
-          >
-            Editar
-          </Button>
+          {isAdmin && (
+            <Button 
+              onClick={() => {
+                handleCloseDetailsDialog()
+                handleOpenEditDialog(selectedTeam)
+              }}
+              variant="contained"
+              sx={{ bgcolor: '#2e7d32' }}
+            >
+              Editar
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

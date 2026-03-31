@@ -12,6 +12,7 @@ from .schedule import Schedule
 from .payment import Payment
 from .payment_type_template import PaymentTypeTemplate
 from .academy import Academy
+from .user import User
 
 __all__ = [
     'Student',
@@ -21,5 +22,6 @@ __all__ = [
     'Schedule',
     'Payment',
     'PaymentTypeTemplate',
-    'Academy'
+    'Academy',
+    'User'
 ]

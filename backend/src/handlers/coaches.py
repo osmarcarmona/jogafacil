@@ -7,6 +7,8 @@ from aws_lambda_powertools.event_handler import APIGatewayHttpResolver
 from aws_lambda_powertools.logging import correlation_paths
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
+from middleware.auth_middleware import require_auth
+
 # Initialize Powertools
 logger = Logger()
 tracer = Tracer()
@@ -18,6 +20,7 @@ table = dynamodb.Table(os.environ['TABLE_NAME'])
 
 
 @app.get("/coaches")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def list_coaches():
     """List all coaches, optionally filtered by academy"""
@@ -47,6 +50,7 @@ def list_coaches():
 
 
 @app.get("/coaches/<coach_id>")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def get_coach(coach_id: str):
     """Get a single coach by ID"""
@@ -67,6 +71,7 @@ def get_coach(coach_id: str):
 
 
 @app.post("/coaches")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def create_coach():
     """Create a new coach"""
@@ -99,6 +104,7 @@ def create_coach():
 
 
 @app.put("/coaches/<coach_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def update_coach(coach_id: str):
     """Update an existing coach"""
@@ -138,6 +144,7 @@ def update_coach(coach_id: str):
 
 
 @app.delete("/coaches/<coach_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def delete_coach(coach_id: str):
     """Delete a coach"""

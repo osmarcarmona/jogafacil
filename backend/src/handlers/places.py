@@ -7,6 +7,8 @@ from aws_lambda_powertools.event_handler import APIGatewayHttpResolver
 from aws_lambda_powertools.logging import correlation_paths
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
+from middleware.auth_middleware import require_auth
+
 # Initialize Powertools
 logger = Logger()
 tracer = Tracer()
@@ -18,6 +20,7 @@ table = dynamodb.Table(os.environ['TABLE_NAME'])
 
 
 @app.get("/places")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def list_places():
     """List all places, optionally filtered by academy"""
@@ -47,6 +50,7 @@ def list_places():
 
 
 @app.get("/places/<place_id>")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def get_place(place_id: str):
     """Get a single place by ID"""
@@ -67,6 +71,7 @@ def get_place(place_id: str):
 
 
 @app.post("/places")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def create_place():
     """Create a new place"""
@@ -102,6 +107,7 @@ def create_place():
 
 
 @app.put("/places/<place_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def update_place(place_id: str):
     """Update an existing place"""
@@ -142,6 +148,7 @@ def update_place(place_id: str):
 
 
 @app.delete("/places/<place_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def delete_place(place_id: str):
     """Delete a place"""

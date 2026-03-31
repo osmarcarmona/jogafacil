@@ -5,6 +5,8 @@ from aws_lambda_powertools.event_handler import APIGatewayHttpResolver
 from aws_lambda_powertools.logging import correlation_paths
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
+from middleware.auth_middleware import require_auth
+
 # Initialize Powertools
 logger = Logger()
 tracer = Tracer()
@@ -16,6 +18,7 @@ table = dynamodb.Table(os.environ['TABLE_NAME'])
 
 
 @app.get("/academies")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def list_academies():
     """List all academies"""
@@ -32,6 +35,7 @@ def list_academies():
 
 
 @app.get("/academies/<academy_id>")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def get_academy(academy_id: str):
     """Get a single academy by ID"""

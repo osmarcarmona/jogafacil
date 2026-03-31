@@ -7,6 +7,8 @@ from aws_lambda_powertools.event_handler import APIGatewayHttpResolver
 from aws_lambda_powertools.logging import correlation_paths
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
+from middleware.auth_middleware import require_auth
+
 # Initialize Powertools
 logger = Logger()
 tracer = Tracer()
@@ -18,6 +20,7 @@ table = dynamodb.Table(os.environ['TABLE_NAME'])
 
 
 @app.get("/teams")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def list_teams():
     """List all teams, optionally filtered by academy"""
@@ -47,6 +50,7 @@ def list_teams():
 
 
 @app.get("/teams/<team_id>")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def get_team(team_id: str):
     """Get a single team by ID"""
@@ -67,6 +71,7 @@ def get_team(team_id: str):
 
 
 @app.post("/teams")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def create_team():
     """Create a new team"""
@@ -100,6 +105,7 @@ def create_team():
 
 
 @app.put("/teams/<team_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def update_team(team_id: str):
     """Update an existing team"""
@@ -140,6 +146,7 @@ def update_team(team_id: str):
 
 
 @app.delete("/teams/<team_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def delete_team(team_id: str):
     """Delete a team"""

@@ -2,11 +2,15 @@ import { apiConfig, endpoints } from '../config/api';
 
 // Generic API request function
 async function apiRequest(url, options = {}) {
+  const token = localStorage.getItem('authToken');
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
   const config = {
     ...apiConfig,
     ...options,
     headers: {
       ...apiConfig.headers,
+      ...authHeaders,
       ...options.headers,
     },
   };
@@ -160,5 +164,31 @@ export const paymentsApi = {
   generate: (data) => apiRequest(`${endpoints.payments}/generate`, {
     method: 'POST',
     body: JSON.stringify(data),
+  }),
+};
+
+// Auth API
+export const authApi = {
+  login: (email, password) => apiRequest(`${endpoints.auth}/login`, {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  }),
+  me: () => apiRequest(`${endpoints.auth}/me`),
+};
+
+// Users API
+export const usersApi = {
+  getAll: (academy) => apiRequest(academy ? `${endpoints.users}?academy=${encodeURIComponent(academy)}` : endpoints.users),
+  getById: (id) => apiRequest(`${endpoints.users}/${id}`),
+  create: (data) => apiRequest(endpoints.users, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id, data) => apiRequest(`${endpoints.users}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id) => apiRequest(`${endpoints.users}/${id}`, {
+    method: 'DELETE',
   }),
 };

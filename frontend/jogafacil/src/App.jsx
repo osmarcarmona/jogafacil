@@ -14,7 +14,8 @@ import {
   IconButton,
   FormControl,
   Select,
-  MenuItem
+  MenuItem,
+  Chip
 } from '@mui/material'
 import {
   SportsFootball,
@@ -25,7 +26,9 @@ import {
   Payments as PaymentsIcon,
   Person,
   LocationOn,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  Logout as LogoutIcon,
+  AdminPanelSettings
 } from '@mui/icons-material'
 
 import Dashboard from './components/Dashboard'
@@ -36,11 +39,32 @@ import Payments from './components/Payments'
 import Coaches from './components/Coaches'
 import Places from './components/Places'
 import StudentDetail from './components/StudentDetail'
+import Login from './components/Login'
+import Users from './components/Users'
 import { useAcademy } from './context/AcademyContext'
+import { useAuth } from './context/AuthContext'
 
 const drawerWidth = 240
 
+const allMenuItems = [
+  { id: 'dashboard', label: 'Panel de Control', icon: <DashboardIcon />, roles: ['admin'] },
+  { id: 'students', label: 'Alumnos', icon: <People />, roles: ['admin'] },
+  { id: 'teams', label: 'Equipos', icon: <Groups />, roles: ['admin', 'coach'] },
+  { id: 'schedule', label: 'Calendario', icon: <CalendarMonth />, roles: ['admin', 'coach'] },
+  { id: 'payments', label: 'Pagos', icon: <PaymentsIcon />, roles: ['admin'] },
+  { id: 'coaches', label: 'Entrenadores', icon: <Person />, roles: ['admin'] },
+  { id: 'places', label: 'Instalaciones', icon: <LocationOn />, roles: ['admin'] },
+  { id: 'users', label: 'Administración', icon: <AdminPanelSettings />, roles: ['admin'] }
+]
+
 function App() {
+  const { user, logout, isAdmin, isCoach } = useAuth()
+
+  // If not authenticated, show login
+  if (!user) {
+    return <Login />
+  }
+
   // Check for student detail query param (new tab view)
   const params = new URLSearchParams(window.location.search)
   const studentDetailId = params.get('student')
@@ -49,32 +73,35 @@ function App() {
     return <StudentDetail studentId={studentDetailId} />
   }
 
-  const [currentView, setCurrentView] = useState('dashboard')
+  return <AuthenticatedApp />
+}
+
+function AuthenticatedApp() {
+  const { user, logout, isAdmin, isCoach } = useAuth()
+  const [currentView, setCurrentView] = useState(() => {
+    // Default view based on role
+    return isCoach ? 'schedule' : 'dashboard'
+  })
   const [mobileOpen, setMobileOpen] = useState(false)
   const { academy, selectAcademy, academies } = useAcademy()
 
-  const menuItems = [
-    { id: 'dashboard', label: 'Panel de Control', icon: <DashboardIcon /> },
-    { id: 'students', label: 'Alumnos', icon: <People /> },
-    { id: 'teams', label: 'Equipos', icon: <Groups /> },
-    { id: 'schedule', label: 'Calendario', icon: <CalendarMonth /> },
-    { id: 'payments', label: 'Pagos', icon: <PaymentsIcon /> },
-    { id: 'coaches', label: 'Entrenadores', icon: <Person /> },
-    { id: 'places', label: 'Instalaciones', icon: <LocationOn /> }
-  ]
+  const menuItems = allMenuItems.filter(item => item.roles.includes(user.role))
 
   const renderView = () => {
     switch (currentView) {
-      case 'dashboard': return <Dashboard />
-      case 'students': return <Students />
+      case 'dashboard': return isAdmin ? <Dashboard /> : <Schedule />
+      case 'students': return isAdmin ? <Students /> : <Schedule />
       case 'teams': return <Teams />
       case 'schedule': return <Schedule />
-      case 'payments': return <Payments />
-      case 'coaches': return <Coaches />
-      case 'places': return <Places />
-      default: return <Dashboard />
+      case 'payments': return isAdmin ? <Payments /> : <Schedule />
+      case 'coaches': return isAdmin ? <Coaches /> : <Schedule />
+      case 'places': return isAdmin ? <Places /> : <Schedule />
+      case 'users': return isAdmin ? <Users /> : <Schedule />
+      default: return isCoach ? <Schedule /> : <Dashboard />
     }
   }
+
+  const roleLabel = user.role === 'admin' ? 'Admin' : 'Entrenador'
 
   const drawer = (
     <Box>
@@ -125,25 +152,36 @@ function App() {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Escuela de Fútbol
           </Typography>
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <Select
-              value={academy}
-              onChange={(e) => selectAcademy(e.target.value)}
-              displayEmpty
-              sx={{
-                color: 'white',
-                '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'white' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'white' },
-                '.MuiSvgIcon-root': { color: 'white' }
-              }}
-            >
-              <MenuItem value="" disabled>Seleccionar Academia</MenuItem>
-              {academies.map((a) => (
-                <MenuItem key={a.id || a} value={a.id || a}>{a.name || a}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <Select
+                value={academy}
+                onChange={(e) => selectAcademy(e.target.value)}
+                displayEmpty
+                sx={{
+                  color: 'white',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'white' },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'white' },
+                  '.MuiSvgIcon-root': { color: 'white' }
+                }}
+              >
+                <MenuItem value="" disabled>Seleccionar Academia</MenuItem>
+                {academies.map((a) => (
+                  <MenuItem key={a.id || a} value={a.id || a}>{a.name || a}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Chip
+              label={`${user.email} (${roleLabel})`}
+              size="small"
+              sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.5)' }}
+              variant="outlined"
+            />
+            <IconButton color="inherit" onClick={logout} title="Cerrar sesión" aria-label="Cerrar sesión">
+              <LogoutIcon />
+            </IconButton>
+          </Box>
         </Toolbar>
       </AppBar>
 

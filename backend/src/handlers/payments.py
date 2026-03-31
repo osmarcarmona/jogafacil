@@ -9,6 +9,8 @@ from aws_lambda_powertools.event_handler import APIGatewayHttpResolver
 from aws_lambda_powertools.logging import correlation_paths
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
+from middleware.auth_middleware import require_auth
+
 # Initialize Powertools
 logger = Logger()
 tracer = Tracer()
@@ -21,6 +23,7 @@ students_table = dynamodb.Table(os.environ.get('STUDENTS_TABLE_NAME', 'jogafacil
 
 
 @app.get("/payments")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def list_payments():
     """List all payments, optionally filtered by academy"""
@@ -50,6 +53,7 @@ def list_payments():
 
 
 @app.get("/payments/<payment_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def get_payment(payment_id: str):
     """Get a single payment by ID"""
@@ -70,6 +74,7 @@ def get_payment(payment_id: str):
 
 
 @app.post("/payments/generate")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def generate_payments():
     """Generate monthly payments for all active students in an academy."""
@@ -124,6 +129,7 @@ def generate_payments():
 
 
 @app.post("/payments")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def create_payment():
     """Create a new payment"""
@@ -161,6 +167,7 @@ def create_payment():
 
 
 @app.put("/payments/<payment_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def update_payment(payment_id: str):
     """Update an existing payment"""
@@ -207,6 +214,7 @@ def update_payment(payment_id: str):
 
 
 @app.put("/payments/<payment_id>/pay")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def mark_payment_paid(payment_id: str):
     """Record a full or partial payment"""
@@ -293,6 +301,7 @@ def mark_payment_paid(payment_id: str):
 
 
 @app.put("/payments/<payment_id>/history")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def update_payment_history(payment_id: str):
     """Edit or delete an abono entry from paymentHistory"""
@@ -374,6 +383,7 @@ def update_payment_history(payment_id: str):
 
 
 @app.delete("/payments/<payment_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def delete_payment(payment_id: str):
     """Delete a payment"""

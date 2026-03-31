@@ -8,6 +8,8 @@ from aws_lambda_powertools.event_handler import APIGatewayHttpResolver
 from aws_lambda_powertools.logging import correlation_paths
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
+from middleware.auth_middleware import require_auth
+
 # Initialize Powertools
 logger = Logger()
 tracer = Tracer()
@@ -19,6 +21,7 @@ table = dynamodb.Table(os.environ['TABLE_NAME'])
 
 
 @app.get("/payment-types")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def list_payment_types():
     """List all payment type templates, optionally filtered by academy"""
@@ -48,6 +51,7 @@ def list_payment_types():
 
 
 @app.get("/payment-types/<template_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def get_payment_type(template_id: str):
     """Get a single payment type template by ID"""
@@ -68,6 +72,7 @@ def get_payment_type(template_id: str):
 
 
 @app.post("/payment-types")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def create_payment_type():
     """Create a new payment type template"""
@@ -109,6 +114,7 @@ def create_payment_type():
 
 
 @app.put("/payment-types/<template_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def update_payment_type(template_id: str):
     """Update an existing payment type template"""
@@ -156,6 +162,7 @@ def update_payment_type(template_id: str):
 
 
 @app.delete("/payment-types/<template_id>")
+@require_auth(allowed_roles=["admin"])
 @tracer.capture_method
 def delete_payment_type(template_id: str):
     """Delete a payment type template"""

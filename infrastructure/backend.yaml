@@ -12,6 +12,7 @@ Globals:
         POWERTOOLS_SERVICE_NAME: jogafacil
         POWERTOOLS_METRICS_NAMESPACE: jogafacil
         LOG_LEVEL: INFO
+        JWT_SECRET: !Ref JwtSecret
 
 Parameters:
   Stage:
@@ -32,6 +33,11 @@ Parameters:
     Type: String
     Default: jogafacil
     Description: Project name
+
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    Description: Secret key used to sign and verify JWT tokens
 
 Resources:
   # CloudWatch Log Groups
@@ -81,6 +87,18 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ProjectName}-payment-types-${Environment}'
+      RetentionInDays: 7
+
+  AuthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-auth-${Environment}'
+      RetentionInDays: 7
+
+  UsersLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-users-${Environment}'
       RetentionInDays: 7
 
   ScheduledPaymentGenLogGroup:
@@ -226,6 +244,23 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-users-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
   # Lambda Execution Role
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -263,6 +298,7 @@ Resources:
                   - !Sub '${PaymentsTable.Arn}/index/*'
                   - !GetAtt AcademiesTable.Arn
                   - !GetAtt PaymentTypeTemplatesTable.Arn
+                  - !GetAtt UsersTable.Arn
 
   # API Gateway
   ApiGateway:
@@ -473,6 +509,7 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref ScheduleTable
+          TEAMS_TABLE_NAME: !Ref TeamsTable
       Events:
         ListSchedule:
           Type: HttpApi
@@ -664,6 +701,70 @@ Resources:
       Tags:
         Environment: !Ref Environment
 
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-auth-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.auth.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersTable
+      Events:
+        Login:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /auth/login
+            Method: POST
+        Me:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /auth/me
+            Method: GET
+      Tags:
+        Environment: !Ref Environment
+
+  UsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-users-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.users.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersTable
+      Events:
+        ListUsers:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /users
+            Method: GET
+        CreateUser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /users
+            Method: POST
+        UpdateUser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /users/{id}
+            Method: PUT
+        DeleteUser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /users/{id}
+            Method: DELETE
+      Tags:
+        Environment: !Ref Environment
+
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
@@ -724,3 +825,9 @@ Outputs:
     Value: !Ref PaymentTypeTemplatesTable
     Export:
       Name: !Sub '${ProjectName}-payment-type-templates-table-${Environment}'
+
+  UsersTableName:
+    Description: Users DynamoDB table name
+    Value: !Ref UsersTable
+    Export:
+      Name: !Sub '${ProjectName}-users-table-${Environment}'

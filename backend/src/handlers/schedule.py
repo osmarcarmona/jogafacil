@@ -7,6 +7,8 @@ from aws_lambda_powertools.event_handler import APIGatewayHttpResolver
 from aws_lambda_powertools.logging import correlation_paths
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
+from middleware.auth_middleware import require_auth
+
 # Initialize Powertools
 logger = Logger()
 tracer = Tracer()
@@ -18,6 +20,7 @@ table = dynamodb.Table(os.environ['TABLE_NAME'])
 
 
 @app.get("/schedule")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def list_schedule():
     """List all schedule entries, optionally filtered by academy"""
@@ -47,6 +50,7 @@ def list_schedule():
 
 
 @app.get("/schedule/<schedule_id>")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def get_schedule(schedule_id: str):
     """Get a single schedule entry by ID"""
@@ -67,6 +71,7 @@ def get_schedule(schedule_id: str):
 
 
 @app.post("/schedule")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def create_schedule():
     """Create a new schedule entry"""
@@ -80,6 +85,7 @@ def create_schedule():
             'teamId': data.get('teamId'),
             'coachId': data.get('coachId'),
             'placeId': data.get('placeId'),
+            'placeName': data.get('placeName'),
             'startTime': data.get('startTime'),
             'endTime': data.get('endTime'),
             'arrivalTime': data.get('arrivalTime'),
@@ -87,6 +93,8 @@ def create_schedule():
             'opponent': data.get('opponent'),
             'kit': data.get('kit'),
             'matchType': data.get('matchType'),
+            'fieldType': data.get('fieldType'),
+            'jornada': data.get('jornada'),
             'notes': data.get('notes'),
             'roster': data.get('roster'),
             'status': 'scheduled',
@@ -106,6 +114,7 @@ def create_schedule():
 
 
 @app.put("/schedule/<schedule_id>")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def update_schedule(schedule_id: str):
     """Update an existing schedule entry"""
@@ -117,9 +126,9 @@ def update_schedule(schedule_id: str):
         expr_values = {}
         expr_names = {}
         
-        fields = ['date', 'teamId', 'coachId', 'placeId', 'startTime', 'endTime',
-                  'arrivalTime', 'type', 'opponent', 'kit', 'matchType', 'notes',
-                  'status', 'academy', 'roster']
+        fields = ['date', 'teamId', 'coachId', 'placeId', 'placeName', 'startTime', 'endTime',
+                  'arrivalTime', 'type', 'opponent', 'kit', 'matchType', 'fieldType',
+                  'jornada', 'notes', 'status', 'academy', 'roster']
         
         for field in fields:
             if field in data:
@@ -147,6 +156,7 @@ def update_schedule(schedule_id: str):
 
 
 @app.delete("/schedule/<schedule_id>")
+@require_auth(allowed_roles=["admin", "coach"])
 @tracer.capture_method
 def delete_schedule(schedule_id: str):
     """Delete a schedule entry"""

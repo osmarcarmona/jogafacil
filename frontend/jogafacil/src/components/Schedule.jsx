@@ -1,25 +1,29 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Box, Typography, Tabs, Tab, Paper, List, ListItem, ListItemText, Chip,
   Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   FormControl, InputLabel, Select, MenuItem, Grid, CircularProgress,
-  Alert, IconButton, ToggleButtonGroup, ToggleButton, Tooltip
+  Alert, IconButton, ToggleButtonGroup, ToggleButton, Tooltip, Autocomplete
 } from '@mui/material'
-import { LocationOn, AccessTime, Add, Delete, Edit, ViewList, CalendarMonth, ChevronLeft, ChevronRight, Visibility } from '@mui/icons-material'
+import { LocationOn, AccessTime, Add, Delete, Edit, ViewList, CalendarMonth, ChevronLeft, ChevronRight, Visibility, Share, ContentCopy } from '@mui/icons-material'
 import { scheduleApi, teamsApi, coachesApi, placesApi, studentsApi } from '../services/api'
 import { useAcademy } from '../context/AcademyContext'
+import { useAuth } from '../context/AuthContext'
 import RosterSelector from './RosterSelector'
 import { filterPlayersByTeam } from '../utils/rosterUtils'
+import html2canvas from 'html2canvas-pro'
 
 const initialFormData = {
-  teamId: '', coachId: '', placeId: '', date: '',
+  teamId: '', coachId: '', placeId: '', placeName: '', date: '',
   arrivalTime: '', startTime: '', kit: '',
   opponent: '', matchType: 'Local',
+  fieldType: '', jornada: '',
   roster: []
 }
 
 export default function Schedule() {
   const { academy } = useAcademy()
+  const { user, isAdmin, isCoach } = useAuth()
   const [tab, setTab] = useState(0)
   const [events, setEvents] = useState([])
   const [teams, setTeams] = useState([])
@@ -53,6 +57,61 @@ export default function Schedule() {
   const [calendarMode, setCalendarMode] = useState('month') // 'month' | 'week'
   const [currentDate, setCurrentDate] = useState(new Date())
   const [detailEvent, setDetailEvent] = useState(null)
+  const detailRef = useRef(null)
+
+  const handleShareImage = async () => {
+    if (!detailRef.current) return
+    try {
+      const canvas = await html2canvas(detailRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+      })
+      canvas.toBlob(async (blob) => {
+        if (!blob) return
+        const file = new File([blob], 'convocatoria.png', { type: 'image/png' })
+        if (navigator.share && navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Convocatoria' })
+        } else {
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = 'convocatoria.png'
+          a.click()
+          URL.revokeObjectURL(url)
+        }
+      }, 'image/png')
+    } catch (err) {
+      console.error('Error generating image:', err)
+    }
+  }
+
+  const [copied, setCopied] = useState(false)
+
+  const handleCopyImage = async () => {
+    if (!detailRef.current) return
+    try {
+      const canvas = await html2canvas(detailRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+      })
+      canvas.toBlob(async (blob) => {
+        if (!blob) return
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ])
+          setCopied(true)
+          setTimeout(() => setCopied(false), 2000)
+        } catch (err) {
+          console.error('Clipboard write failed:', err)
+        }
+      }, 'image/png')
+    } catch (err) {
+      console.error('Error generating image:', err)
+    }
+  }
 
   useEffect(() => { loadAll() }, [academy])
 
@@ -76,6 +135,10 @@ export default function Schedule() {
   }
 
   const getName = (list, id) => list.find(i => i.id === id)?.name || id
+  const getPlaceName = (ev) => {
+    if (ev.placeName) return ev.placeName
+    return getName(places, ev.placeId)
+  }
   const getTeamCoaches = (teamId) => {
     const team = teams.find(t => t.id === teamId)
     if (!team) return coaches
@@ -92,6 +155,18 @@ export default function Schedule() {
   const trainings = applyFilters(events.filter(e => e.type === 'training'))
   const matches = applyFilters(events.filter(e => e.type === 'match'))
 
+  // Coach can only write to teams they are assigned to
+  const canWriteEvent = (ev) => {
+    if (isAdmin) return true
+    if (!isCoach || !user?.coachId) return false
+    const team = teams.find(t => t.id === ev.teamId)
+    if (!team) return false
+    const coachIds = team.coachIds || (team.coachId ? [team.coachId] : [])
+    return coachIds.includes(user.coachId)
+  }
+
+  const canCreateEvents = isAdmin || isCoach
+
   const handleOpenDialog = () => {
     setEditingEvent(null); setEventType(tab === 1 ? 'match' : 'training')
     setFormData(initialFormData); setOpenDialog(true)
@@ -100,10 +175,12 @@ export default function Schedule() {
     setEditingEvent(ev); setEventType(ev.type || 'training')
     setFormData({
       teamId: ev.teamId || '', coachId: ev.coachId || '',
-      placeId: ev.placeId || '', date: ev.date || '',
+      placeId: ev.placeId || '', placeName: ev.placeName || '',
+      date: ev.date || '',
       arrivalTime: ev.arrivalTime || '', startTime: ev.startTime || '',
       kit: ev.kit || '', opponent: ev.opponent || '',
       matchType: ev.matchType || 'Local',
+      fieldType: ev.fieldType || '', jornada: ev.jornada || '',
       roster: ev.roster || []
     })
     setOpenDialog(true)
@@ -126,7 +203,13 @@ export default function Schedule() {
   const handleSubmit = async () => {
     try {
       const payload = { ...formData, type: eventType, academy }
-      if (eventType === 'training') { delete payload.opponent; delete payload.matchType; delete payload.roster }
+      // If custom place name was typed (no placeId), send placeName
+      if (!payload.placeId && payload.placeName) {
+        delete payload.placeId
+      } else {
+        delete payload.placeName
+      }
+      if (eventType === 'training') { delete payload.opponent; delete payload.matchType; delete payload.roster; delete payload.fieldType; delete payload.jornada }
       if (editingEvent) await scheduleApi.update(editingEvent.id, payload)
       else await scheduleApi.create(payload)
       handleCloseDialog(); loadAll()
@@ -147,8 +230,16 @@ export default function Schedule() {
   )
 
   const availableCoaches = formData.teamId ? getTeamCoaches(formData.teamId) : coaches
+  // Coaches can only create/edit events for their assigned teams
+  const availableTeams = isCoach && user?.coachId
+    ? teams.filter(t => {
+        const coachIds = t.coachIds || (t.coachId ? [t.coachId] : [])
+        return coachIds.includes(user.coachId)
+      })
+    : teams
+  const hasPlace = !!(formData.placeId || formData.placeName)
   const isFormValid = formData.teamId && formData.coachId && formData.date
-    && formData.arrivalTime && formData.startTime && formData.placeId
+    && formData.arrivalTime && formData.startTime && hasPlace
     && (eventType === 'training' || formData.opponent)
   const canSubmit = editingEvent ? (formData.teamId && formData.date) : isFormValid
 
@@ -168,10 +259,14 @@ export default function Schedule() {
             {isMatch && (
               <Button size="small" startIcon={<Visibility fontSize="small" />} onClick={() => setDetailEvent(ev)}>Ver</Button>
             )}
-            <Button size="small" onClick={() => handleOpenEditDialog(ev)}>Editar</Button>
-            <IconButton size="small" color="error" onClick={() => handleDelete(ev.id)}>
-              <Delete fontSize="small" />
-            </IconButton>
+            {canWriteEvent(ev) && (
+              <>
+                <Button size="small" onClick={() => handleOpenEditDialog(ev)}>Editar</Button>
+                <IconButton size="small" color="error" onClick={() => handleDelete(ev.id)}>
+                  <Delete fontSize="small" />
+                </IconButton>
+              </>
+            )}
           </Box>
         }>
           <ListItemText
@@ -198,13 +293,20 @@ export default function Schedule() {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                   <LocationOn fontSize="small" color="action" />
                   <Typography variant="body2" color="text.secondary">
-                    {getName(places, ev.placeId)}
+                    {getPlaceName(ev)}
                   </Typography>
                 </Box>
                 <Typography variant="body2" color="text.secondary">
                   Entrenador: {getName(coaches, ev.coachId)}
                   {ev.kit ? ` | Equipación: ${ev.kit}` : ''}
                 </Typography>
+                {isMatch && (ev.fieldType || ev.jornada) && (
+                  <Typography variant="body2" color="text.secondary">
+                    {ev.fieldType ? `Cancha: ${ev.fieldType}` : ''}
+                    {ev.fieldType && ev.jornada ? ' | ' : ''}
+                    {ev.jornada || ''}
+                  </Typography>
+                )}
                 {isMatch && ev.roster && ev.roster.length > 0 && (
                   <Typography variant="body2" color="text.secondary">
                     Convocados: {ev.roster.length}
@@ -328,28 +430,30 @@ export default function Schedule() {
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3, mt: 0.3 }}>
                   {dayEvents.slice(0, calendarMode === 'week' ? 6 : 3).map(ev => (
-                    <Tooltip key={ev.id} title={`${getName(teams, ev.teamId)} — ${ev.startTime} — ${getName(places, ev.placeId)}`} arrow>
+                    <Tooltip key={ev.id} title={`${getName(teams, ev.teamId)} — ${ev.startTime} — ${getPlaceName(ev)}`} arrow>
                       <Box sx={{
                         display: 'flex', alignItems: 'center', gap: 0.3,
                         px: 0.5, py: 0.2, borderRadius: 0.5, fontSize: 11,
                         bgcolor: ev.type === 'match' ? 'warning.light' : 'success.light',
                         color: ev.type === 'match' ? 'warning.contrastText' : 'success.contrastText',
-                        '&:hover .cal-actions': { display: 'flex' }
+                        '&:hover .cal-actions': { display: canWriteEvent(ev) ? 'flex' : 'none' }
                       }}>
-                        <Box sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
-                          onClick={() => handleOpenEditDialog(ev)}>
+                        <Box sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: canWriteEvent(ev) ? 'pointer' : 'default' }}
+                          onClick={() => canWriteEvent(ev) && handleOpenEditDialog(ev)}>
                           {ev.startTime} {getName(teams, ev.teamId)}
                         </Box>
-                        <Box className="cal-actions" sx={{ display: 'none', alignItems: 'center', gap: 0 }}>
-                          <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleOpenEditDialog(ev) }}
-                            sx={{ p: 0.2, color: 'inherit' }}>
-                            <Edit sx={{ fontSize: 12 }} />
-                          </IconButton>
-                          <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDelete(ev.id) }}
-                            sx={{ p: 0.2, color: 'inherit' }}>
-                            <Delete sx={{ fontSize: 12 }} />
-                          </IconButton>
-                        </Box>
+                        {canWriteEvent(ev) && (
+                          <Box className="cal-actions" sx={{ display: 'none', alignItems: 'center', gap: 0 }}>
+                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleOpenEditDialog(ev) }}
+                              sx={{ p: 0.2, color: 'inherit' }}>
+                              <Edit sx={{ fontSize: 12 }} />
+                            </IconButton>
+                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDelete(ev.id) }}
+                              sx={{ p: 0.2, color: 'inherit' }}>
+                              <Delete sx={{ fontSize: 12 }} />
+                            </IconButton>
+                          </Box>
+                        )}
                       </Box>
                     </Tooltip>
                   ))}
@@ -378,7 +482,7 @@ export default function Schedule() {
             <ToggleButton value="calendar"><CalendarMonth fontSize="small" /></ToggleButton>
           </ToggleButtonGroup>
         </Box>
-        <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: '#2e7d32' }} onClick={handleOpenDialog}>
+        <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: '#2e7d32', display: canCreateEvents ? 'inline-flex' : 'none' }} onClick={handleOpenDialog}>
           Nuevo Evento
         </Button>
       </Box>
@@ -467,7 +571,7 @@ export default function Schedule() {
                   <InputLabel>Equipo</InputLabel>
                   <Select value={formData.teamId} label="Equipo"
                     onChange={(e) => handleInputChange('teamId', e.target.value)}>
-                    {teams.map(t => <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>)}
+                    {availableTeams.map(t => <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Grid>
@@ -482,11 +586,49 @@ export default function Schedule() {
               </Grid>
               <Grid item xs={12}>
                 <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }} required fullWidth>
-                  <InputLabel>Instalación</InputLabel>
-                  <Select value={formData.placeId} label="Instalación"
-                    onChange={(e) => handleInputChange('placeId', e.target.value)}>
-                    {places.map(p => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
-                  </Select>
+                  <Autocomplete
+                    freeSolo
+                    options={places}
+                    getOptionLabel={(option) => {
+                      if (typeof option === 'string') return option
+                      return option.name || ''
+                    }}
+                    value={
+                      formData.placeId
+                        ? places.find(p => p.id === formData.placeId) || null
+                        : formData.placeName || null
+                    }
+                    onChange={(_, newValue) => {
+                      if (newValue && typeof newValue === 'object' && newValue.id) {
+                        handleInputChange('placeId', newValue.id)
+                        setFormData(prev => ({ ...prev, placeName: '' }))
+                      } else {
+                        handleInputChange('placeId', '')
+                        setFormData(prev => ({ ...prev, placeName: typeof newValue === 'string' ? newValue : '' }))
+                      }
+                    }}
+                    onInputChange={(_, inputValue, reason) => {
+                      if (reason === 'input') {
+                        const match = places.find(p => p.name === inputValue)
+                        if (match) {
+                          handleInputChange('placeId', match.id)
+                          setFormData(prev => ({ ...prev, placeName: '' }))
+                        } else {
+                          handleInputChange('placeId', '')
+                          setFormData(prev => ({ ...prev, placeName: inputValue }))
+                        }
+                      }
+                    }}
+                    renderInput={(params) => (
+                      <TextField {...params} label="Instalación" required
+                        placeholder="Seleccionar o escribir instalación" />
+                    )}
+                    isOptionEqualToValue={(option, value) => {
+                      if (typeof value === 'string') return option.name === value
+                      return option.id === value?.id
+                    }}
+                    fullWidth
+                  />
                 </FormControl>
               </Grid>
               <Grid item xs={12} sm={4}>
@@ -529,6 +671,40 @@ export default function Schedule() {
                       </Select>
                     </FormControl>
                   </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }} required fullWidth>
+                      <Autocomplete
+                        freeSolo
+                        options={['Fútbol 7', 'Fútbol 8', 'Fútbol 11', 'Fútbol Sala']}
+                        value={formData.fieldType || null}
+                        onChange={(_, newValue) => handleInputChange('fieldType', newValue || '')}
+                        onInputChange={(_, inputValue, reason) => {
+                          if (reason === 'input') handleInputChange('fieldType', inputValue)
+                        }}
+                        renderInput={(params) => (
+                          <TextField {...params} label="Tipo de Cancha" placeholder="Ej: Fútbol 7" />
+                        )}
+                        fullWidth
+                      />
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }} required fullWidth>
+                      <Autocomplete
+                        freeSolo
+                        options={Array.from({ length: 38 }, (_, i) => `Jornada ${i + 1}`)}
+                        value={formData.jornada || null}
+                        onChange={(_, newValue) => handleInputChange('jornada', newValue || '')}
+                        onInputChange={(_, inputValue, reason) => {
+                          if (reason === 'input') handleInputChange('jornada', inputValue)
+                        }}
+                        renderInput={(params) => (
+                          <TextField {...params} label="Jornada" placeholder="Ej: Jornada 1" />
+                        )}
+                        fullWidth
+                      />
+                    </FormControl>
+                  </Grid>
                   {formData.teamId && (
                     <Grid item xs={12}>
                       <RosterSelector
@@ -565,19 +741,31 @@ export default function Schedule() {
               )}
             </DialogTitle>
             <DialogContent>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, pt: 1 }}>
+              <Box ref={detailRef} sx={{ display: 'flex', flexDirection: 'column', gap: 1, pt: 1, pb: 1 }}>
+                <Typography variant="h6" fontWeight="bold" sx={{ mb: 0.5 }}>
+                  {getName(teams, detailEvent.teamId)}
+                  {detailEvent.opponent ? ` vs ${detailEvent.opponent}` : ''}
+                  {detailEvent.matchType ? ` (${detailEvent.matchType})` : ''}
+                </Typography>
                 <Typography variant="body2">
                   <AccessTime fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />
                   {detailEvent.date} — Llegada: {detailEvent.arrivalTime} | Inicio: {detailEvent.startTime}
                 </Typography>
                 <Typography variant="body2">
                   <LocationOn fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />
-                  {getName(places, detailEvent.placeId)}
+                  {getPlaceName(detailEvent)}
                 </Typography>
                 <Typography variant="body2">
                   Entrenador: {getName(coaches, detailEvent.coachId)}
                   {detailEvent.kit ? ` | Equipación: ${detailEvent.kit}` : ''}
                 </Typography>
+                {(detailEvent.fieldType || detailEvent.jornada) && (
+                  <Typography variant="body2">
+                    {detailEvent.fieldType ? `Cancha: ${detailEvent.fieldType}` : ''}
+                    {detailEvent.fieldType && detailEvent.jornada ? ' | ' : ''}
+                    {detailEvent.jornada || ''}
+                  </Typography>
+                )}
 
                 {detailEvent.roster && detailEvent.roster.length > 0 ? (
                   <Box sx={{ mt: 2 }}>
@@ -600,6 +788,12 @@ export default function Schedule() {
               </Box>
             </DialogContent>
             <DialogActions>
+              <Button onClick={handleCopyImage} startIcon={<ContentCopy />} color="primary">
+                {copied ? 'Copiado' : 'Copiar'}
+              </Button>
+              <Button onClick={handleShareImage} startIcon={<Share />} color="primary">
+                Compartir
+              </Button>
               <Button onClick={() => setDetailEvent(null)}>Cerrar</Button>
               <Button variant="contained" sx={{ bgcolor: '#2e7d32' }}
                 onClick={() => { handleOpenEditDialog(detailEvent); setDetailEvent(null) }}>
