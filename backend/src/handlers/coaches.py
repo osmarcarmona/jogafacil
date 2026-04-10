@@ -1,6 +1,7 @@
 import os
 import uuid
 from datetime import datetime
+from decimal import Decimal
 import boto3
 from aws_lambda_powertools import Logger, Tracer
 from aws_lambda_powertools.event_handler import APIGatewayHttpResolver
@@ -79,6 +80,9 @@ def create_coach():
     logger.info("Creating coach", extra={"data": data})
     
     try:
+        salary_raw = data.get('salaryPerTraining', 0)
+        salary_per_training = Decimal(str(salary_raw)) if salary_raw else Decimal('0')
+
         coach = {
             'id': str(uuid.uuid4()),
             'name': data.get('name'),
@@ -89,6 +93,7 @@ def create_coach():
             'experience': data.get('experience'),
             'status': 'active',
             'academy': data.get('academy'),
+            'salaryPerTraining': salary_per_training,
             'createdAt': datetime.utcnow().isoformat(),
             'updatedAt': datetime.utcnow().isoformat()
         }
@@ -124,6 +129,12 @@ def update_coach(coach_id: str):
                 expr_values[f':{field}'] = data[field]
                 expr_names[f'#{field}'] = field
         
+        if 'salaryPerTraining' in data:
+            update_expr += '#salaryPerTraining = :salaryPerTraining, '
+            salary_raw = data['salaryPerTraining']
+            expr_values[':salaryPerTraining'] = Decimal(str(salary_raw)) if salary_raw else Decimal('0')
+            expr_names['#salaryPerTraining'] = 'salaryPerTraining'
+
         update_expr += '#updatedAt = :updatedAt'
         expr_values[':updatedAt'] = datetime.utcnow().isoformat()
         expr_names['#updatedAt'] = 'updatedAt'

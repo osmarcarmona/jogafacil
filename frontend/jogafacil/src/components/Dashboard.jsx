@@ -3,6 +3,7 @@ import { Grid, Paper, Typography, Box, CircularProgress, Alert } from '@mui/mate
 import { People, Groups, Person, CalendarMonth } from '@mui/icons-material'
 import { studentsApi, teamsApi, coachesApi, scheduleApi } from '../services/api'
 import { useAcademy } from '../context/AcademyContext'
+import FinancialDashboard from './FinancialDashboard'
 
 const StatCard = ({ title, value, icon: Icon, color, loading }) => (
   <Paper sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -71,6 +72,7 @@ export default function Dashboard() {
           <StatCard title="Eventos" value={stats.schedule} icon={CalendarMonth} color="#d32f2f" loading={loading} />
         </Grid>
       </Grid>
+      <FinancialDashboard />
     </Box>
   )
 }

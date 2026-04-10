@@ -21,6 +21,8 @@ export const endpoints = {
   academies: `${API_URL}/academies`,
   auth: `${API_URL}/auth`,
   users: `${API_URL}/users`,
+  expenses: `${API_URL}/expenses`,
+  salaries: `${API_URL}/salaries`,
 };
 
 export default apiConfig;

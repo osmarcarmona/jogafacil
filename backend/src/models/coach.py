@@ -1,4 +1,5 @@
 from dataclasses import dataclass, asdict
+from decimal import Decimal
 from typing import Optional, List
 
 
@@ -14,6 +15,7 @@ class Coach:
     experience: Optional[int] = None
     status: str = 'active'
     academy: Optional[str] = None
+    salaryPerTraining: Decimal = Decimal('0')
     createdAt: Optional[str] = None
     updatedAt: Optional[str] = None
 

@@ -43,7 +43,8 @@ export default function Coaches() {
     email: '',
     address: '',
     certifications: '',
-    experience: ''
+    experience: '',
+    salaryPerTraining: ''
   })
 
   const specialties = ['Iniciación', 'Técnica', 'Táctica', 'Preparación Física', 'Porteros', 'General']
@@ -89,7 +90,8 @@ export default function Coaches() {
       email: coach.email || '',
       address: coach.address || '',
       certifications: coach.certifications || '',
-      experience: coach.experience?.toString() || ''
+      experience: coach.experience?.toString() || '',
+      salaryPerTraining: coach.salaryPerTraining?.toString() || ''
     })
     setOpenDialog(true)
   }
@@ -114,7 +116,8 @@ export default function Coaches() {
       email: '',
       address: '',
       certifications: '',
-      experience: ''
+      experience: '',
+      salaryPerTraining: ''
     })
   }
 
@@ -310,6 +313,17 @@ export default function Coaches() {
                   onChange={(e) => handleInputChange('experience', e.target.value)}
                 />
               </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Salario por Entrenamiento"
+                  type="number"
+                  inputProps={{ min: 0, step: '0.01' }}
+                  value={formData.salaryPerTraining}
+                  onChange={(e) => handleInputChange('salaryPerTraining', e.target.value)}
+                  helperText="Monto que recibe el entrenador por cada sesión de entrenamiento"
+                />
+              </Grid>
             </Grid>
           </Box>
         </DialogContent>
@@ -374,6 +388,11 @@ export default function Coaches() {
                     </Typography>
                   </Grid>
                 )}
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    <strong>Salario por Entrenamiento:</strong> {selectedCoach.salaryPerTraining ? `$${Number(selectedCoach.salaryPerTraining).toFixed(2)}` : '$0.00'}
+                  </Typography>
+                </Grid>
                 {selectedCoach.createdAt && (
                   <Grid item xs={12}>
                     <Typography variant="body2" color="text.secondary" gutterBottom>

@@ -101,6 +101,18 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/${ProjectName}-users-${Environment}'
       RetentionInDays: 7
 
+  ExpensesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-expenses-${Environment}'
+      RetentionInDays: 7
+
+  SalariesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-salaries-${Environment}'
+      RetentionInDays: 7
+
   ScheduledPaymentGenLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -244,6 +256,40 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
+  ExpensesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-expenses-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  SalariesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-salaries-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
   UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -288,6 +334,7 @@ Resources:
                   - dynamodb:DeleteItem
                   - dynamodb:Query
                   - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
                 Resource:
                   - !GetAtt StudentsTable.Arn
                   - !GetAtt CoachesTable.Arn
@@ -299,6 +346,8 @@ Resources:
                   - !GetAtt AcademiesTable.Arn
                   - !GetAtt PaymentTypeTemplatesTable.Arn
                   - !GetAtt UsersTable.Arn
+                  - !GetAtt ExpensesTable.Arn
+                  - !GetAtt SalariesTable.Arn
 
   # API Gateway
   ApiGateway:
@@ -633,6 +682,108 @@ Resources:
       Tags:
         Environment: !Ref Environment
 
+  ExpensesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-expenses-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.expenses.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ExpensesTable
+      Events:
+        ListExpenses:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /expenses
+            Method: GET
+        GetExpense:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /expenses/{id}
+            Method: GET
+        CreateExpense:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /expenses
+            Method: POST
+        UpdateExpense:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /expenses/{id}
+            Method: PUT
+        MarkExpensePaid:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /expenses/{id}/pay
+            Method: PUT
+        DeleteExpense:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /expenses/{id}
+            Method: DELETE
+      Tags:
+        Environment: !Ref Environment
+
+  SalariesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-salaries-${Environment}'
+      CodeUri: ../backend/src
+      Handler: handlers.salaries.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref SalariesTable
+          SCHEDULE_TABLE_NAME: !Ref ScheduleTable
+          COACHES_TABLE_NAME: !Ref CoachesTable
+      Events:
+        ListSalaries:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /salaries
+            Method: GET
+        GetSalary:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /salaries/{id}
+            Method: GET
+        GenerateSalaries:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /salaries/generate
+            Method: POST
+        UpdateSalary:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /salaries/{id}
+            Method: PUT
+        MarkSalaryPaid:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /salaries/{id}/pay
+            Method: PUT
+        DeleteSalary:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApiGateway
+            Path: /salaries/{id}
+            Method: DELETE
+      Tags:
+        Environment: !Ref Environment
+
   PaymentTypesFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -831,3 +982,15 @@ Outputs:
     Value: !Ref UsersTable
     Export:
       Name: !Sub '${ProjectName}-users-table-${Environment}'
+
+  ExpensesTableName:
+    Description: Expenses DynamoDB table name
+    Value: !Ref ExpensesTable
+    Export:
+      Name: !Sub '${ProjectName}-expenses-table-${Environment}'
+
+  SalariesTableName:
+    Description: Salaries DynamoDB table name
+    Value: !Ref SalariesTable
+    Export:
+      Name: !Sub '${ProjectName}-salaries-table-${Environment}'

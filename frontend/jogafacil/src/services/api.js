@@ -167,6 +167,48 @@ export const paymentsApi = {
   }),
 };
 
+// Expenses API
+export const expensesApi = {
+  getAll: (academy) => apiRequest(academy ? `${endpoints.expenses}?academy=${encodeURIComponent(academy)}` : endpoints.expenses),
+  getById: (id) => apiRequest(`${endpoints.expenses}/${id}`),
+  create: (data) => apiRequest(endpoints.expenses, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id, data) => apiRequest(`${endpoints.expenses}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  markPaid: (id, data) => apiRequest(`${endpoints.expenses}/${id}/pay`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id) => apiRequest(`${endpoints.expenses}/${id}`, {
+    method: 'DELETE',
+  }),
+};
+
+// Salaries API
+export const salariesApi = {
+  getAll: (academy) => apiRequest(academy ? `${endpoints.salaries}?academy=${encodeURIComponent(academy)}` : endpoints.salaries),
+  getById: (id) => apiRequest(`${endpoints.salaries}/${id}`),
+  generate: (data) => apiRequest(`${endpoints.salaries}/generate`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id, data) => apiRequest(`${endpoints.salaries}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  markPaid: (id, data) => apiRequest(`${endpoints.salaries}/${id}/pay`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id) => apiRequest(`${endpoints.salaries}/${id}`, {
+    method: 'DELETE',
+  }),
+};
+
 // Auth API
 export const authApi = {
   login: (email, password) => apiRequest(`${endpoints.auth}/login`, {
