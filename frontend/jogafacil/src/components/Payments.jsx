@@ -30,9 +30,10 @@ import {
   Snackbar,
   Tabs,
   Tab,
-  IconButton
+  IconButton,
+  Checkbox
 } from '@mui/material'
-import { CheckCircle, Warning, Error as ErrorIcon, Receipt, Search, FilterList, Payment as PaymentIcon, Edit, Delete, Add, PictureAsPdf } from '@mui/icons-material'
+import { CheckCircle, Warning, Error as ErrorIcon, Receipt, Search, FilterList, Payment as PaymentIcon, Edit, Delete, Add, PictureAsPdf, DeleteSweep } from '@mui/icons-material'
 import { useAcademy } from '../context/AcademyContext'
 import { paymentsApi, studentsApi, teamsApi, paymentTypesApi, expensesApi, salariesApi, coachesApi, scheduleApi } from '../services/api'
 import { getDisplayStatus, filterPayments, filterPaymentsByType } from '../utils/paymentUtils'
@@ -120,6 +121,9 @@ export default function Payments() {
   const [deletePaymentOpen, setDeletePaymentOpen] = useState(false)
   const [deletePaymentTarget, setDeletePaymentTarget] = useState(null)
 
+  // Bulk selection
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState(new Set())
+
   // Edit/delete abono dialog
   const [editAbonoOpen, setEditAbonoOpen] = useState(false)
   const [editAbonoPaymentId, setEditAbonoPaymentId] = useState(null)
@@ -181,19 +185,12 @@ export default function Payments() {
   const [salaryTeamFilter, setSalaryTeamFilter] = useState('Todos')
   const [salaryDateFrom, setSalaryDateFrom] = useState(() => {
     const d = new Date()
-    const day = d.getDay()
-    const diffToMonday = day === 0 ? -6 : 1 - day
-    const monday = new Date(d)
-    monday.setDate(d.getDate() + diffToMonday)
-    return monday.toISOString().split('T')[0]
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
   })
   const [salaryDateTo, setSalaryDateTo] = useState(() => {
     const d = new Date()
-    const day = d.getDay()
-    const diffToSunday = day === 0 ? 0 : 7 - day
-    const sunday = new Date(d)
-    sunday.setDate(d.getDate() + diffToSunday)
-    return sunday.toISOString().split('T')[0]
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
   })
 
   // Salary generate
@@ -568,6 +565,37 @@ export default function Payments() {
       setDeletePaymentOpen(false)
       setDeletePaymentTarget(null)
       setSnackbar({ open: true, message: 'Pago eliminado', severity: 'success' })
+      await fetchPayments()
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message, severity: 'error' })
+    }
+  }
+
+  // --- Bulk delete payments ---
+  const handleTogglePaymentSelect = (id) => {
+    setSelectedPaymentIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleSelectAllPayments = () => {
+    if (selectedPaymentIds.size === filteredAndSortedPayments.length) {
+      setSelectedPaymentIds(new Set())
+    } else {
+      setSelectedPaymentIds(new Set(filteredAndSortedPayments.map(p => p.id)))
+    }
+  }
+
+  const handleBulkDeletePayments = async () => {
+    if (selectedPaymentIds.size === 0) return
+    if (!window.confirm(`¿Estás seguro de eliminar ${selectedPaymentIds.size} pago(s)?`)) return
+    try {
+      await Promise.all([...selectedPaymentIds].map(id => paymentsApi.delete(id)))
+      setSelectedPaymentIds(new Set())
+      setSnackbar({ open: true, message: `${selectedPaymentIds.size} pagos eliminados`, severity: 'success' })
       await fetchPayments()
     } catch (err) {
       setSnackbar({ open: true, message: err.message, severity: 'error' })
@@ -1088,6 +1116,11 @@ export default function Payments() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" fontWeight="bold">Pagos</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
+          {selectedPaymentIds.size > 0 && (
+            <Button variant="outlined" color="error" startIcon={<DeleteSweep />} onClick={handleBulkDeletePayments}>
+              Eliminar ({selectedPaymentIds.size})
+            </Button>
+          )}
           <Button
             variant="outlined"
             startIcon={generateLoading ? <CircularProgress size={18} /> : <PaymentIcon />}
@@ -1242,6 +1275,13 @@ export default function Payments() {
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  indeterminate={selectedPaymentIds.size > 0 && selectedPaymentIds.size < filteredAndSortedPayments.length}
+                  checked={filteredAndSortedPayments.length > 0 && selectedPaymentIds.size === filteredAndSortedPayments.length}
+                  onChange={handleSelectAllPayments}
+                />
+              </TableCell>
               <TableCell>
                 <TableSortLabel active={orderBy === 'studentName'} direction={orderBy === 'studentName' ? order : 'asc'} onClick={() => handleSort('studentName')}>
                   Alumno
@@ -1275,7 +1315,7 @@ export default function Payments() {
           <TableBody>
             {filteredAndSortedPayments.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">No se encontraron pagos</Typography>
                 </TableCell>
               </TableRow>
@@ -1284,6 +1324,12 @@ export default function Payments() {
                 const ds = getDisplayStatus(payment, now)
                 return (
                   <TableRow key={payment.id} hover>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={selectedPaymentIds.has(payment.id)}
+                        onChange={() => handleTogglePaymentSelect(payment.id)}
+                      />
+                    </TableCell>
                     <TableCell>{payment.studentName}</TableCell>
                     <TableCell>
                       {(studentTeamMap[payment.studentId] || [])

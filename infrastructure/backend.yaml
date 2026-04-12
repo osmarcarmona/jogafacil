@@ -379,7 +379,7 @@ Resources:
         Variables:
           TABLE_NAME: !Ref StudentsTable
           PAYMENTS_TABLE_NAME: !Ref PaymentsTable
-          DEFAULT_INSCRIPTION_FEE: '50'
+          PAYMENT_TYPE_TEMPLATES_TABLE_NAME: !Ref PaymentTypeTemplatesTable
       Events:
         ListStudents:
           Type: HttpApi
@@ -841,7 +841,7 @@ Resources:
           PAYMENTS_TABLE_NAME: !Ref PaymentsTable
           STUDENTS_TABLE_NAME: !Ref StudentsTable
           ACADEMIES_TABLE_NAME: !Ref AcademiesTable
-          DEFAULT_MONTHLY_FEE: '100'
+          PAYMENT_TYPE_TEMPLATES_TABLE_NAME: !Ref PaymentTypeTemplatesTable
       Events:
         DailySchedule:
           Type: Schedule

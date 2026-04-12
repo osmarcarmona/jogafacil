@@ -5,8 +5,8 @@ import {
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, FormControl, InputLabel, Select, MenuItem, Grid, Chip, OutlinedInput
 } from '@mui/material'
-import { Add, Edit, Delete } from '@mui/icons-material'
-import { usersApi, coachesApi } from '../services/api'
+import { Add, Edit, Delete, Save, Close, Settings } from '@mui/icons-material'
+import { usersApi, coachesApi, paymentTypesApi } from '../services/api'
 import { useAcademy } from '../context/AcademyContext'
 
 export default function Users() {
@@ -21,7 +21,27 @@ export default function Users() {
     email: '', password: '', name: '', role: 'coach', academies: [], coachId: ''
   })
 
+  // Inscription fee state
+  const [inscriptionTemplate, setInscriptionTemplate] = useState(null)
+  const [inscriptionFee, setInscriptionFee] = useState('')
+  const [editingFee, setEditingFee] = useState(false)
+  const [creatingFee, setCreatingFee] = useState(false)
+  const [newFeeAmount, setNewFeeAmount] = useState('')
+  const [feeLoading, setFeeLoading] = useState(false)
+  const [feeSuccess, setFeeSuccess] = useState(null)
+  const [feeError, setFeeError] = useState(null)
+
   useEffect(() => { loadData() }, [academy])
+
+  useEffect(() => {
+    if (academy) {
+      loadInscriptionFee()
+    } else {
+      setInscriptionTemplate(null)
+      setInscriptionFee('')
+      setEditingFee(false)
+    }
+  }, [academy])
 
   const loadData = async () => {
     try {
@@ -36,6 +56,81 @@ export default function Users() {
     } catch (err) {
       setError('Error al cargar usuarios: ' + err.message)
     } finally { setLoading(false) }
+  }
+
+  const loadInscriptionFee = async () => {
+    try {
+      setFeeLoading(true)
+      setFeeError(null)
+      const data = await paymentTypesApi.getAll(academy)
+      const templates = data.paymentTypes || data.payment_types || []
+      const template = templates.find(
+        t => t.name && t.name.toLowerCase() === 'inscripción'
+      )
+      setInscriptionTemplate(template || null)
+      setInscriptionFee(template ? template.defaultAmount : '')
+    } catch (err) {
+      setFeeError('Error al cargar la cuota de inscripción: ' + err.message)
+    } finally {
+      setFeeLoading(false)
+    }
+  }
+
+  const handleSaveFee = async () => {
+    const amount = parseFloat(inscriptionFee)
+    if (isNaN(amount) || amount <= 0) {
+      setFeeError('El monto debe ser un número mayor a 0.')
+      return
+    }
+    if (!inscriptionTemplate) return
+    try {
+      setFeeLoading(true)
+      setFeeError(null)
+      setFeeSuccess(null)
+      await paymentTypesApi.update(inscriptionTemplate.id, { defaultAmount: amount })
+      setInscriptionTemplate(prev => ({ ...prev, defaultAmount: amount }))
+      setEditingFee(false)
+      setFeeSuccess('Cuota de inscripción actualizada correctamente.')
+      setTimeout(() => setFeeSuccess(null), 3000)
+    } catch (err) {
+      setFeeError('Error al actualizar la cuota: ' + err.message)
+    } finally {
+      setFeeLoading(false)
+    }
+  }
+
+  const handleCancelEditFee = () => {
+    setEditingFee(false)
+    setInscriptionFee(inscriptionTemplate ? inscriptionTemplate.defaultAmount : '')
+    setFeeError(null)
+  }
+
+  const handleCreateFee = async () => {
+    const amount = parseFloat(newFeeAmount)
+    if (isNaN(amount) || amount <= 0) {
+      setFeeError('El monto debe ser un número mayor a 0.')
+      return
+    }
+    try {
+      setFeeLoading(true)
+      setFeeError(null)
+      setFeeSuccess(null)
+      await paymentTypesApi.create({
+        name: 'Inscripción',
+        defaultAmount: amount,
+        academy: academy,
+        description: 'Cuota de inscripción'
+      })
+      setCreatingFee(false)
+      setNewFeeAmount('')
+      setFeeSuccess('Cuota de inscripción creada correctamente.')
+      setTimeout(() => setFeeSuccess(null), 3000)
+      await loadInscriptionFee()
+    } catch (err) {
+      setFeeError('Error al crear la cuota: ' + err.message)
+    } finally {
+      setFeeLoading(false)
+    }
   }
 
   const getUserAcademies = (u) => u.academies || (u.academy ? [u.academy] : [])
@@ -106,6 +201,88 @@ export default function Users() {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {!academy && <Alert severity="warning" sx={{ mb: 2 }}>Selecciona una academia para ver usuarios.</Alert>}
+
+      {/* Academy Settings Section */}
+      {academy && (
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <Settings sx={{ mr: 1, color: '#2e7d32' }} />
+            <Typography variant="h6" fontWeight="bold">Configuración de Academia</Typography>
+          </Box>
+
+          {feeSuccess && <Alert severity="success" sx={{ mb: 1 }}>{feeSuccess}</Alert>}
+          {feeError && <Alert severity="error" sx={{ mb: 1 }}>{feeError}</Alert>}
+
+          {feeLoading && !inscriptionTemplate ? (
+            <Box display="flex" alignItems="center" gap={1}>
+              <CircularProgress size={20} />
+              <Typography variant="body2">Cargando cuota de inscripción...</Typography>
+            </Box>
+          ) : !inscriptionTemplate ? (
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                No se encontró una cuota de inscripción configurada para esta academia.
+              </Typography>
+              {creatingFee ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Typography variant="body1">Monto:</Typography>
+                  <TextField
+                    size="small"
+                    type="number"
+                    value={newFeeAmount}
+                    onChange={(e) => setNewFeeAmount(e.target.value)}
+                    slotProps={{ htmlInput: { min: 0.01, step: 0.01 } }}
+                    sx={{ width: 140 }}
+                  />
+                  <IconButton size="small" color="primary" onClick={handleCreateFee}
+                    disabled={feeLoading || !newFeeAmount || parseFloat(newFeeAmount) <= 0}>
+                    <Save fontSize="small" />
+                  </IconButton>
+                  <IconButton size="small" onClick={() => { setCreatingFee(false); setNewFeeAmount(''); setFeeError(null) }} disabled={feeLoading}>
+                    <Close fontSize="small" />
+                  </IconButton>
+                </Box>
+              ) : (
+                <Button size="small" variant="outlined" startIcon={<Add />} onClick={() => setCreatingFee(true)}>
+                  Crear cuota de inscripción
+                </Button>
+              )}
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="body1">Cuota de Inscripción:</Typography>
+              {editingFee ? (
+                <>
+                  <TextField
+                    size="small"
+                    type="number"
+                    value={inscriptionFee}
+                    onChange={(e) => setInscriptionFee(e.target.value)}
+                    slotProps={{ htmlInput: { min: 0.01, step: 0.01 } }}
+                    sx={{ width: 140 }}
+                  />
+                  <IconButton size="small" color="primary" onClick={handleSaveFee}
+                    disabled={feeLoading || !inscriptionFee || parseFloat(inscriptionFee) <= 0}>
+                    <Save fontSize="small" />
+                  </IconButton>
+                  <IconButton size="small" onClick={handleCancelEditFee} disabled={feeLoading}>
+                    <Close fontSize="small" />
+                  </IconButton>
+                </>
+              ) : (
+                <>
+                  <Typography variant="body1" fontWeight="bold">
+                    €{Number(inscriptionTemplate.defaultAmount).toFixed(2)}
+                  </Typography>
+                  <IconButton size="small" onClick={() => setEditingFee(true)}>
+                    <Edit fontSize="small" />
+                  </IconButton>
+                </>
+              )}
+            </Box>
+          )}
+        </Paper>
+      )}
 
       <TableContainer component={Paper}>
         <Table>

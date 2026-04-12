@@ -21,6 +21,7 @@ app = APIGatewayHttpResolver()
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table(os.environ['TABLE_NAME'])
 payments_table = dynamodb.Table(os.environ.get('PAYMENTS_TABLE_NAME', 'Payments'))
+payment_type_templates_table = dynamodb.Table(os.environ.get('PAYMENT_TYPE_TEMPLATES_TABLE_NAME', 'PaymentTypeTemplates'))
 
 
 @app.get("/students")
@@ -119,9 +120,30 @@ def create_student():
         # Create inscription payment for active students
         if student.get('status') == 'active':
             try:
-                default_fee = Decimal(os.environ.get('DEFAULT_INSCRIPTION_FEE', '50'))
+                # Look up the "Inscripción" payment type template for this academy
+                inscription_fee = None
+                academy = student.get('academy')
+                if academy:
+                    from boto3.dynamodb.conditions import Attr
+                    template_result = payment_type_templates_table.scan(
+                        FilterExpression=Attr('academy').eq(academy)
+                    )
+                    templates = template_result.get('Items', [])
+                    for tmpl in templates:
+                        if tmpl.get('name', '').lower() == 'inscripción':
+                            inscription_fee = tmpl.get('defaultAmount')
+                            logger.info(f"Found inscription template for academy {academy}, amount: {inscription_fee}")
+                            break
+
+                # If no inscription template found, reject student creation
+                if inscription_fee is None:
+                    # Delete the student we just created since we can't charge inscription
+                    table.delete_item(Key={'id': student['id']})
+                    logger.warning(f"No inscription template found for academy {academy}, student creation rejected")
+                    return {"error": "No hay una cuota de inscripción registrada para esta academia. Regístrala primero en la Página de Administración."}, 400
+
                 registration_date = student['createdAt'][:10]  # YYYY-MM-DD
-                inscription = create_inscription_payment(student, registration_date, default_fee)
+                inscription = create_inscription_payment(student, registration_date, inscription_fee)
                 if inscription:
                     payments_table.put_item(Item=inscription)
                     logger.info(f"Inscription payment created: {inscription['id']}")

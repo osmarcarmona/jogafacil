@@ -24,10 +24,12 @@ import {
   Select,
   MenuItem,
   CircularProgress,
-  Alert
+  Alert,
+  TableSortLabel,
+  Checkbox
 } from '@mui/material'
-import { Add, Edit, Delete, Search, Visibility } from '@mui/icons-material'
-import { studentsApi, teamsApi } from '../services/api'
+import { Add, Edit, Delete, Search, Visibility, DeleteSweep } from '@mui/icons-material'
+import { studentsApi, teamsApi, paymentTypesApi } from '../services/api'
 import { useAcademy } from '../context/AcademyContext'
 
 export default function Students() {
@@ -38,6 +40,9 @@ export default function Students() {
   const [error, setError] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [positionFilter, setPositionFilter] = useState('')
+  const [teamFilter, setTeamFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [windowFilter, setWindowFilter] = useState('')
   const [openDialog, setOpenDialog] = useState(false)
   const [detailStudent, setDetailStudent] = useState(null)
   const [editingStudent, setEditingStudent] = useState(null)
@@ -54,10 +59,15 @@ export default function Students() {
     paymentWindow: 1,
     status: 'active'
   })
+  const [noInscriptionWarning, setNoInscriptionWarning] = useState(false)
+  const [hasInscriptionTemplate, setHasInscriptionTemplate] = useState(false)
+  const [sortDirection, setSortDirection] = useState('asc')
+  const [selectedIds, setSelectedIds] = useState(new Set())
 
   useEffect(() => {
     loadStudents()
     loadTeams()
+    checkInscriptionTemplate()
   }, [academy])
 
   const loadStudents = async () => {
@@ -82,7 +92,26 @@ export default function Students() {
     }
   }
 
+  const checkInscriptionTemplate = async () => {
+    if (!academy) {
+      setHasInscriptionTemplate(false)
+      return
+    }
+    try {
+      const data = await paymentTypesApi.getAll(academy)
+      const templates = data.paymentTypes || data.payment_types || []
+      const found = templates.some(t => t.name && t.name.toLowerCase() === 'inscripción')
+      setHasInscriptionTemplate(found)
+    } catch {
+      setHasInscriptionTemplate(false)
+    }
+  }
+
   const handleOpenDialog = () => {
+    if (!hasInscriptionTemplate) {
+      setNoInscriptionWarning(true)
+      return
+    }
     setEditingStudent(null)
     setOpenDialog(true)
   }
@@ -152,10 +181,86 @@ export default function Students() {
     }
   }
 
+  const handleToggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredStudents.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredStudents.map(s => s.id)))
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!window.confirm(`¿Estás seguro de eliminar ${selectedIds.size} alumno(s)?`)) return
+    try {
+      await Promise.all([...selectedIds].map(id => studentsApi.delete(id)))
+      setSelectedIds(new Set())
+      loadStudents()
+    } catch (err) {
+      setError('Error al eliminar alumnos: ' + err.message)
+    }
+  }
+
   const filteredStudents = students.filter(student => {
     const matchesSearch = student.name?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesPosition = !positionFilter || student.position === positionFilter
-    return matchesSearch && matchesPosition
+    const matchesPosition = !positionFilter || (positionFilter === '__none__' ? !student.position : student.position === positionFilter)
+    const matchesTeam = !teamFilter || (student.teamIds || []).includes(teamFilter)
+    const matchesStatus = !statusFilter || student.status === statusFilter
+    const matchesWindow = !windowFilter || Number(student.paymentWindow || 1) === Number(windowFilter)
+    return matchesSearch && matchesPosition && matchesTeam && matchesStatus && matchesWindow
+  }).sort((a, b) => {
+    const cmp = (a.name || '').localeCompare(b.name || '')
+    return sortDirection === 'asc' ? cmp : -cmp
+  })
+
+  // Stats
+  const totalStudents = students.length
+  const activeStudents = students.filter(s => s.status === 'active').length
+  const inactiveStudents = students.filter(s => s.status !== 'active').length
+  const positions = ['Portero', 'Defensa', 'Mediocampista', 'Delantero']
+  const positionCounts = positions.reduce((acc, pos) => {
+    acc[pos] = students.filter(s => s.position === pos).length
+    return acc
+  }, {})
+  const noPosition = students.filter(s => !s.position).length
+  const window1Count = students.filter(s => Number(s.paymentWindow) !== 2).length
+  const window2Count = students.filter(s => Number(s.paymentWindow) === 2).length
+
+  const handleStatClick = (type, value) => {
+    if (type === 'position') {
+      setPositionFilter(prev => prev === value ? '' : value)
+      setStatusFilter('')
+      setWindowFilter('')
+    } else if (type === 'status') {
+      setStatusFilter(prev => prev === value ? '' : value)
+      setPositionFilter('')
+      setWindowFilter('')
+    } else if (type === 'window') {
+      setWindowFilter(prev => prev === value ? '' : value)
+      setPositionFilter('')
+      setStatusFilter('')
+    } else {
+      setPositionFilter('')
+      setStatusFilter('')
+      setWindowFilter('')
+    }
+  }
+
+  const statCardSx = (active) => ({
+    p: 1.5, textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s',
+    border: active ? 2 : 1,
+    borderColor: active ? 'primary.main' : 'divider',
+    bgcolor: active ? 'action.selected' : 'background.paper',
+    '&:hover': { bgcolor: 'action.hover' }
   })
 
   if (loading) {
@@ -172,16 +277,75 @@ export default function Students() {
         <Typography variant="h4" fontWeight="bold">
           Alumnos
         </Typography>
-        <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: '#2e7d32' }} onClick={handleOpenDialog}>
-          Nuevo Alumno
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          {selectedIds.size > 0 && (
+            <Button variant="outlined" color="error" startIcon={<DeleteSweep />} onClick={handleBulkDelete}>
+              Eliminar ({selectedIds.size})
+            </Button>
+          )}
+          <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: '#2e7d32' }} onClick={handleOpenDialog}>
+            Nuevo Alumno
+          </Button>
+        </Box>
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {!academy && <Alert severity="warning" sx={{ mb: 2 }}>Selecciona una academia en el encabezado para ver y crear alumnos.</Alert>}
 
+      {/* Stats */}
+      {academy && students.length > 0 && (
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={6} sm={3} md={2}>
+            <Paper sx={statCardSx(!positionFilter && !statusFilter && !windowFilter)} onClick={() => handleStatClick('clear')}>
+              <Typography variant="h5" fontWeight="bold">{totalStudents}</Typography>
+              <Typography variant="caption" color="text.secondary">Total</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3} md={2}>
+            <Paper sx={statCardSx(statusFilter === 'active')} onClick={() => handleStatClick('status', 'active')}>
+              <Typography variant="h5" fontWeight="bold" color="success.main">{activeStudents}</Typography>
+              <Typography variant="caption" color="text.secondary">Activos</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3} md={2}>
+            <Paper sx={statCardSx(statusFilter === 'inactive')} onClick={() => handleStatClick('status', 'inactive')}>
+              <Typography variant="h5" fontWeight="bold" color="text.disabled">{inactiveStudents}</Typography>
+              <Typography variant="caption" color="text.secondary">Inactivos</Typography>
+            </Paper>
+          </Grid>
+          {positions.map(pos => (
+            <Grid item xs={6} sm={3} md={2} key={pos}>
+              <Paper sx={statCardSx(positionFilter === pos)} onClick={() => handleStatClick('position', pos)}>
+                <Typography variant="h5" fontWeight="bold">{positionCounts[pos]}</Typography>
+                <Typography variant="caption" color="text.secondary">{pos}</Typography>
+              </Paper>
+            </Grid>
+          ))}
+          {noPosition > 0 && (
+            <Grid item xs={6} sm={3} md={2}>
+              <Paper sx={statCardSx(positionFilter === '__none__')} onClick={() => handleStatClick('position', '__none__')}>
+                <Typography variant="h5" fontWeight="bold">{noPosition}</Typography>
+                <Typography variant="caption" color="text.secondary">Sin posición</Typography>
+              </Paper>
+            </Grid>
+          )}
+          <Grid item xs={6} sm={3} md={2}>
+            <Paper sx={statCardSx(windowFilter === '1')} onClick={() => handleStatClick('window', '1')}>
+              <Typography variant="h5" fontWeight="bold">{window1Count}</Typography>
+              <Typography variant="caption" color="text.secondary">Ventana 1</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3} md={2}>
+            <Paper sx={statCardSx(windowFilter === '2')} onClick={() => handleStatClick('window', '2')}>
+              <Typography variant="h5" fontWeight="bold">{window2Count}</Typography>
+              <Typography variant="caption" color="text.secondary">Ventana 2</Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+      )}
+
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={8}>
+        <Grid item xs={12} sm={5}>
           <TextField
             fullWidth
             placeholder="Buscar alumno..."
@@ -198,7 +362,7 @@ export default function Students() {
             }}
           />
         </Grid>
-        <Grid item xs={12} sm={4}>
+        <Grid item xs={6} sm={3}>
            <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>
             <InputLabel>Posición</InputLabel>
             <Select
@@ -214,16 +378,45 @@ export default function Students() {
             </Select>
           </FormControl>
         </Grid>
+        <Grid item xs={6} sm={4}>
+          <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>
+            <InputLabel>Equipo</InputLabel>
+            <Select
+              value={teamFilter}
+              label="Equipo"
+              onChange={(e) => setTeamFilter(e.target.value)}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {teams.map(t => (
+                <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
       </Grid>
 
       <TableContainer component={Paper}>
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Nombre</TableCell>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  indeterminate={selectedIds.size > 0 && selectedIds.size < filteredStudents.length}
+                  checked={filteredStudents.length > 0 && selectedIds.size === filteredStudents.length}
+                  onChange={handleSelectAll}
+                />
+              </TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active
+                  direction={sortDirection}
+                  onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                >
+                  Nombre
+                </TableSortLabel>
+              </TableCell>
               <TableCell>Posición</TableCell>
               <TableCell>Fecha de Nacimiento</TableCell>
-              <TableCell>Teléfono</TableCell>
               <TableCell>Equipos</TableCell>
               <TableCell>Ventana de Pago</TableCell>
               <TableCell>Estado</TableCell>
@@ -240,10 +433,15 @@ export default function Students() {
             ) : (
               filteredStudents.map((student) => (
                 <TableRow key={student.id} hover sx={{ cursor: 'pointer' }} onClick={() => setDetailStudent(student)}>
+                  <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selectedIds.has(student.id)}
+                      onChange={() => handleToggleSelect(student.id)}
+                    />
+                  </TableCell>
                   <TableCell>{student.name}</TableCell>
                   <TableCell>{student.position || '—'}</TableCell>
                   <TableCell>{student.dateOfBirth || '—'}</TableCell>
-                  <TableCell>{student.phone}</TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                       {(student.teamIds || []).length === 0 ? '—' : student.teamIds.map((teamId) => {
@@ -526,6 +724,21 @@ export default function Students() {
             disabled={!formData.name || !formData.phone}
           >
             {editingStudent ? 'Actualizar Alumno' : 'Registrar Alumno'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* No inscription fee warning dialog */}
+      <Dialog open={noInscriptionWarning} onClose={() => setNoInscriptionWarning(false)} maxWidth="sm">
+        <DialogTitle>Cuota de Inscripción No Registrada</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            No hay una inscripción registrada, regístrala primero antes de crear alumnos en la Página de Administración.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNoInscriptionWarning(false)} variant="contained">
+            Entendido
           </Button>
         </DialogActions>
       </Dialog>

@@ -93,6 +93,16 @@ def create_payment_type():
         if not academy or not str(academy).strip():
             return {"error": "Academy is required"}, 400
 
+        # Enforce one "Inscripción" template per academy
+        if name.strip().lower() == 'inscripción':
+            from boto3.dynamodb.conditions import Attr
+            existing = table.scan(
+                FilterExpression=Attr('academy').eq(academy)
+            )
+            for item in existing.get('Items', []):
+                if item.get('name', '').lower() == 'inscripción':
+                    return {"error": "Ya existe una cuota de inscripción para esta academia."}, 400
+
         template = {
             'id': str(uuid.uuid4()),
             'name': name.strip(),

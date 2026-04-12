@@ -16,8 +16,7 @@ dynamodb = boto3.resource('dynamodb')
 academies_table = dynamodb.Table(os.environ.get('ACADEMIES_TABLE_NAME', 'jogafacil-academies-dev'))
 students_table = dynamodb.Table(os.environ.get('STUDENTS_TABLE_NAME', 'jogafacil-students-dev'))
 payments_table = dynamodb.Table(os.environ.get('PAYMENTS_TABLE_NAME', 'jogafacil-payments-dev'))
-
-DEFAULT_MONTHLY_FEE = Decimal(os.environ.get('DEFAULT_MONTHLY_FEE', '100'))
+payment_type_templates_table = dynamodb.Table(os.environ.get('PAYMENT_TYPE_TEMPLATES_TABLE_NAME', 'PaymentTypeTemplates'))
 
 
 def _scan_all(table, **kwargs):
@@ -54,6 +53,24 @@ def handler(event, context):
     for academy in academies:
         academy_id = academy.get('id', 'unknown')
         try:
+            # Look up the "Inscripción" payment type template for this academy
+            templates = _scan_all(
+                payment_type_templates_table,
+                FilterExpression=Attr('academy').eq(academy_id),
+            )
+            inscription_fee = None
+            for tmpl in templates:
+                if tmpl.get('name', '').lower() == 'inscripción':
+                    inscription_fee = Decimal(str(tmpl.get('defaultAmount', '0')))
+                    break
+
+            if inscription_fee is None:
+                logger.warning(
+                    f"Academy {academy_id}: no 'Inscripción' template found, skipping payment generation"
+                )
+                errors.append(f"academy={academy_id}: no inscription fee template configured")
+                continue
+
             active_students = _scan_all(
                 students_table,
                 FilterExpression=Attr('academy').eq(academy_id) & Attr('status').eq('active'),
@@ -65,7 +82,7 @@ def handler(event, context):
             )
 
             new_payments, skipped = generate_payments_for_academy(
-                active_students, existing_payments, month, DEFAULT_MONTHLY_FEE,
+                active_students, existing_payments, month, inscription_fee,
             )
 
             for payment in new_payments:
